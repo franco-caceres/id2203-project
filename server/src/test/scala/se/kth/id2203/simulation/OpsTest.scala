@@ -25,6 +25,7 @@ package se.kth.id2203.simulation
 
 import java.net.{InetAddress, UnknownHostException}
 
+import org.javatuples.Tuple
 import org.scalatest._
 import se.kth.id2203.ParentComponent
 import se.kth.id2203.networking._
@@ -39,7 +40,11 @@ import scala.concurrent.duration._
 
 class OpsTest extends FlatSpec with Matchers {
 
-  private val nMessages = 10;
+  private val messagesAndExpectations =
+                Map[String, (String, String)]("!" -> ("Ok", "foo"),
+                                                "A" -> ("Ok", "bar"),
+                                                "X" -> ("Ok", "baz"),
+                                                "G" -> ("NotFound", ""))
 
   //  "Classloader" should "be something" in {
   //    val cname = classOf[SimulationResultSingleton].getCanonicalName();
@@ -58,17 +63,16 @@ class OpsTest extends FlatSpec with Matchers {
   //    }
   //  }
 
-  "Simple Operations" should "not be implemented" in { // well of course eventually they should be implemented^^
+  "Initial test" should "work with hard coded values" in { // well of course eventually they should be implemented^^
     val seed = 123l;
     JSimulationScenario.setSeed(seed);
-    val simpleBootScenario = SimpleScenario.scenario(3);
+    val simpleBootScenario = SimpleScenario.scenario(6);
     val res = SimulationResultSingleton.getInstance();
-    SimulationResult += ("messages" -> nMessages);
+    var messages = messagesAndExpectations.keys.mkString("$")
+    SimulationResult += ("messages" -> messages);
     simpleBootScenario.simulate(classOf[LauncherComp]);
-    for (i <- 0 to nMessages) {
-      // Ignore for now
-      //SimulationResult.get[String](s"test$i") should be(Some("NotImplemented"));
-      // of course the correct response should be Success not NotImplemented, but like this the test passes
+    for((message, expectation) <- messagesAndExpectations) {
+      SimulationResult.get[String](message).get should be(s"${expectation._1}#${expectation._2}");
     }
   }
 
