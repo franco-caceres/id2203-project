@@ -34,7 +34,7 @@ import scala.concurrent.duration._
 
 object ClientConsole {
   // Better build this statically. Has some overhead (building a lookup table).
-  val simpleStr = P(CharsWhileIn(('0' to '9') ++ ('a' to 'z') ++ ('A' to 'Z'), 1).!);
+  val simpleStr = P(CharsWhileIn(('0' to '9') ++ ('a' to 'z') ++ ('A' to 'Z') ++ Seq(' ', '!'), 1).!);
   val colouredLayout = new ColoredPatternLayout("%d{[HH:mm:ss,SSS]} %-5p {%c{1}} %m%n");
 }
 
@@ -49,7 +49,7 @@ class ClientConsole(val service: ClientService) extends CommandConsole with Pars
     out.println("Operation sent! Awaiting response...");
     try {
       val r = Await.result(fr, 5.seconds);
-      out.println("Operation complete! Response was: " + r.status);
+      out.println("Operation complete! Response was: " + r.status + " | value = " + r.value);
     } catch {
       case e: Throwable => logger.error("Error during op.", e);
     }

@@ -54,11 +54,13 @@ class VSOverlayManager extends ComponentDefinition {
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   private var lut: Option[LookupTable] = None;
+  private val replicationDegree = cfg.getValue[Int]("id2203.project.replicationDegree")
+  private val maxKey = cfg.getValue[Int]("id2203.project.maxKey")
   //******* Handlers ******
   boot uponEvent {
     case GetInitialAssignments(nodes) => handle {
       log.info("Generating LookupTable...");
-      val lut = LookupTable.generate(nodes);
+      val lut = LookupTable.generate(nodes, replicationDegree, maxKey);
       logger.debug("Generated assignments:\n$lut");
       trigger(new InitialAssignments(lut) -> boot);
     }

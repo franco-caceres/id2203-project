@@ -37,11 +37,17 @@ class KVService extends ComponentDefinition {
   val route = requires(Routing);
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
+  val store = Map[Int, String](33 -> "foo", 65 -> "bar", 88 -> "baz")
   //******* Handlers ******
   net uponEvent {
     case NetMessage(header, op: Op) => handle {
-      log.info("Got operation {}! Now implement me please :)", op);
-      trigger(NetMessage(self, header.src, op.response(OpCode.NotImplemented)) -> net);
+      val storeKey = op.key.hashCode
+      store.get(storeKey) match {
+        case Some(value) =>
+          trigger(NetMessage(self, header.src, op.response(OpCode.Ok, value)) -> net);
+        case None =>
+          trigger(NetMessage(self, header.src, op.response(OpCode.NotFound)) -> net);
+      }
     }
   }
 }
