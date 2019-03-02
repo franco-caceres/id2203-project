@@ -52,7 +52,7 @@ class ScenarioClient extends ComponentDefinition {
     case _: Start => handle {
       val messages = SimulationResult[String]("messages").split('$');
       for(message <- messages) {
-        val op = Op(message)
+        val op = Get(message)
         val routeMsg = RouteMsg(op.key, op)
         trigger(NetMessage(self, server, routeMsg) -> net)
         pending += (op.id -> op.key)
@@ -63,7 +63,7 @@ class ScenarioClient extends ComponentDefinition {
   }
 
   net uponEvent {
-    case NetMessage(header, or@OpResponse(id, status, value)) => handle {
+    case NetMessage(header, or@OperationResponse(id, status, value)) => handle {
       logger.debug(s"Got OpResponse: $or");
       pending.remove(id) match {
         case Some(key) => SimulationResult += key -> s"$status#$value"

@@ -41,10 +41,10 @@ import scala.concurrent.duration._
 class OpsTest extends FlatSpec with Matchers {
 
   private val messagesAndExpectations =
-                Map[String, (String, String)]("!" -> ("Ok", "foo"),
-                                                "A" -> ("Ok", "bar"),
-                                                "X" -> ("Ok", "baz"),
-                                                "G" -> ("NotFound", ""))
+                Map[String, (String, Option[String])]("!" -> ("Ok", Some("foo")),
+                                                "A" -> ("Ok", Some("bar")),
+                                                "X" -> ("Ok", Some("baz")),
+                                                "G" -> ("NotFound", None))
 
   //  "Classloader" should "be something" in {
   //    val cname = classOf[SimulationResultSingleton].getCanonicalName();

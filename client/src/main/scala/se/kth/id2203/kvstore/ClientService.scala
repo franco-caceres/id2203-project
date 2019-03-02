@@ -39,7 +39,7 @@ import scala.concurrent.{Future, Promise};
 
 case class ConnectTimeout(spt: ScheduleTimeout) extends Timeout(spt);
 
-case class OpWithPromise(op: Operation, promise: Promise[OpResponse] = Promise()) extends KompicsEvent;
+case class OperationWithPromise(operation: Operation, promise: Promise[OperationResponse] = Promise()) extends KompicsEvent;
 
 class ClientService extends ComponentDefinition {
 
@@ -49,7 +49,7 @@ class ClientService extends ComponentDefinition {
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   val server = cfg.getValue[NetAddress]("id2203.project.bootstrap-address");
-  private val pending = mutable.SortedMap.empty[UUID, Promise[OpResponse]];
+  private val pending = mutable.SortedMap.empty[UUID, Promise[OperationResponse]];
   private var connected: Option[ConnectAck] = None;
   private var timeoutId: Option[UUID] = None;
 
@@ -79,8 +79,8 @@ class ClientService extends ComponentDefinition {
       val tc = new Thread(c);
       tc.start();
     }
-    case NetMessage(header, or@OpResponse(id, status, value)) => handle {
-      log.debug(s"Got OpResponse: $or");
+    case NetMessage(header, or@OperationResponse(id, status, value)) => handle {
+      log.debug(s"Got OperationResponse: $or");
       pending.remove(id) match {
         case Some(promise) => promise.success(or);
         case None => log.warn(s"ID $id was not pending! Ignoring response.");
@@ -101,17 +101,31 @@ class ClientService extends ComponentDefinition {
   }
 
   loopbck uponEvent {
-    case OpWithPromise(op, promise) => handle {
-      val rm = RouteMsg(op.key, op); // don't know which partition is responsible, so ask the bootstrap server to forward it
+    case OperationWithPromise(operation, promise) => handle {
+      val rm = RouteMsg(operation.key, operation); // don't know which partition is responsible, so ask the bootstrap server to forward it
       trigger(NetMessage(self, server, rm) -> net);
-      pending += (op.id -> promise);
+      pending += (operation.id -> promise);
     }
   }
 
-  def op(key: String): Future[OpResponse] = {
-    val op = Op(key);
-    val owf = OpWithPromise(op);
-    trigger(owf -> onSelf);
-    owf.promise.future
+  def get(key: String): Future[OperationResponse] = {
+    val get = Get(key)
+    val gwf = OperationWithPromise(get)
+    trigger(gwf -> onSelf)
+    gwf.promise.future
+  }
+
+  def put(key: String, value: String): Future[OperationResponse] = {
+    val put = Put(key, value)
+    val pwf = OperationWithPromise(put)
+    trigger(pwf -> onSelf)
+    pwf.promise.future
+  }
+
+  def cas(key: String, compareValue: String, setValue: String): Future[OperationResponse] = {
+    val cas = Cas(key, compareValue, setValue)
+    val cwf = OperationWithPromise(cas)
+    trigger(cwf -> onSelf)
+    cwf.promise.future
   }
 }

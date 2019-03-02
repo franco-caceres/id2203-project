@@ -40,13 +40,21 @@ class KVService extends ComponentDefinition {
   val store = Map[Int, String](33 -> "foo", 65 -> "bar", 88 -> "baz")
   //******* Handlers ******
   net uponEvent {
-    case NetMessage(header, op: Op) => handle {
-      val storeKey = op.key.hashCode
-      store.get(storeKey) match {
-        case Some(value) =>
-          trigger(NetMessage(self, header.src, op.response(OpCode.Ok, value)) -> net);
-        case None =>
-          trigger(NetMessage(self, header.src, op.response(OpCode.NotFound)) -> net);
+    case NetMessage(header, op: Operation) => handle {
+      op match {
+        case g: Get => {
+          val storeKey = op.key.hashCode
+          store.get(storeKey) match {
+            case Some(value) => trigger(NetMessage(self, header.src, op.response(OpCode.Ok, Some(value))) -> net)
+            case None => trigger(NetMessage(self, header.src, op.response(OpCode.NotFound, None)) -> net)
+          }
+        }
+        case p: Put => {
+          trigger(NetMessage(self, header.src, op.response(OpCode.NotImplemented, None)) -> net)
+        }
+        case c: Cas => {
+          trigger(NetMessage(self, header.src, op.response(OpCode.NotImplemented, None)) -> net)
+        }
       }
     }
   }

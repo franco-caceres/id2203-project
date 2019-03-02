@@ -29,31 +29,20 @@ import se.sics.kompics.KompicsEvent;
 
 trait Operation extends KompicsEvent {
   def id: UUID;
-
   def key: String;
+  def response(status: OpCode.OpCode, value: Option[String]): OperationResponse = OperationResponse(id, status, value);
 }
 
-@SerialVersionUID(0xfacc6612da2139eaL)
-case class Op(key: String, id: UUID = UUID.randomUUID()) extends Operation with Serializable {
-  def response(status: OpCode.OpCode, value: String = ""): OpResponse = OpResponse(id, status, value);
-}
+case class Get(key: String, id: UUID = UUID.randomUUID()) extends Operation with Serializable;
+case class Put(key: String, value: String, id: UUID = UUID.randomUUID()) extends Operation with Serializable;
+case class Cas(key: String, compareValue: String, setValue: String, id: UUID = UUID.randomUUID()) extends Operation with Serializable;
 
 object OpCode {
-
   sealed trait OpCode;
-
   case object Ok extends OpCode;
-
   case object NotFound extends OpCode;
-
   case object NotImplemented extends OpCode;
 }
 
-trait OperationResponse extends KompicsEvent {
-  def id: UUID;
-
-  def status: OpCode.OpCode;
-}
-
 @SerialVersionUID(0x0227a2aea45e5e75L)
-case class OpResponse(id: UUID, status: OpCode.OpCode, value: String = "") extends OperationResponse with Serializable;
+case class OperationResponse(id: UUID, status: OpCode.OpCode, value: Option[String] = None) extends KompicsEvent with Serializable;
