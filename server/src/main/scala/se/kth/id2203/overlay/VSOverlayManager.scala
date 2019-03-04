@@ -31,6 +31,8 @@ import se.sics.kompics.network.Network
 import se.sics.kompics.sl._
 import se.sics.kompics.timer.Timer
 
+import se.kth.id2203.implemented._;
+
 import scala.util.Random;
 
 /**
@@ -48,6 +50,7 @@ class VSOverlayManager extends ComponentDefinition {
 
   //******* Ports ******
   val route = provides(Routing);
+  val topol = provides[Topology];
   val boot = requires(Bootstrapping);
   val net = requires[Network];
   val timer = requires[Timer];
@@ -56,17 +59,24 @@ class VSOverlayManager extends ComponentDefinition {
   private var lut: Option[LookupTable] = None;
   private val replicationDegree = cfg.getValue[Int]("id2203.project.replicationDegree")
   private val maxKey = cfg.getValue[Int]("id2203.project.maxKey")
+  private val minKey = cfg.getValue[Int]("id2203.project.minKey")
   //******* Handlers ******
   boot uponEvent {
     case GetInitialAssignments(nodes) => handle {
       log.info("Generating LookupTable...");
-      val lut = LookupTable.generate(nodes, replicationDegree, maxKey);
+      val lut = LookupTable.generate(nodes, replicationDegree, minKey, maxKey);
       logger.debug("Generated assignments:\n$lut");
       trigger(new InitialAssignments(lut) -> boot);
+      //provide the topology to components that require it
+      trigger( Provide_topology(nodes) -> topol );
     }
     case Booted(assignment: LookupTable) => handle {
       log.info("Got NodeAssignment, overlay ready.");
       lut = Some(assignment);
+      //provide the topology to components that require it
+      val (_, nodesSets) = assignment.partitions.unzip;
+      val nodes = nodesSets.flatten.toSet;
+      trigger( Provide_topology(nodes) -> topol );
     }
   }
 

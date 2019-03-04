@@ -66,7 +66,7 @@ class BootstrapServer extends ComponentDefinition {
   //******* Handlers ******
   ctrl uponEvent {
     case _: Start => handle {
-      log.info("Starting bootstrap server on {}, waiting for {} nodes...", self, bootThreshold);
+      //log.info("Starting bootstrap server on {}, waiting for {} nodes...", self, bootThreshold);
       val timeout: Long = (cfg.getValue[Long]("id2203.project.keepAlivePeriod") * 2l);
       val spt = new SchedulePeriodicTimeout(timeout, timeout);
       spt.setTimeoutEvent(BSTimeout(spt));
@@ -80,13 +80,13 @@ class BootstrapServer extends ComponentDefinition {
     case BSTimeout(_) => handle {
       state match {
         case Collecting => {
-          log.info("{} hosts in active set.", active.size);
+          //log.info("{} hosts in active set.", active.size);
           if (active.size >= bootThreshold) {
             bootUp();
           }
         }
         case Seeding => {
-          log.info("{} hosts in ready set.", ready.size);
+          //log.info("{} hosts in ready set.", ready.size);
           if (ready.size >= bootThreshold) {
             log.info("Finished seeding. Bootstrapping complete.");
             initialAssignment match {

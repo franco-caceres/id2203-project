@@ -31,7 +31,7 @@ import se.kth.id2203.networking._
 import se.sics.kompics.Start
 import se.sics.kompics.network.Network
 import se.sics.kompics.sl._
-import se.sics.kompics.timer._;
+import se.sics.kompics.timer._
 
 object BootstrapClient {
 

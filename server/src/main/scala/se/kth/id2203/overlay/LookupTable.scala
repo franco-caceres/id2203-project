@@ -60,18 +60,18 @@ class LookupTable extends NodeAssignment with Serializable {
 object LookupTable {
   def generate(nodes: Set[NetAddress]): LookupTable = {
     val lut = new LookupTable();
-    lut.partitions ++= (0 -> nodes);
-    lut
+    lut.partitions ++= (Int.MinValue -> nodes);
+    return lut;
   }
-  def generate(nodes: Set[NetAddress], replicationDegree: Int, maxKey: Int): LookupTable = {
+  def generate(nodes: Set[NetAddress], replicationDegree: Int, minKey: Int, maxKey: Int): LookupTable = {
     if(nodes.size < replicationDegree) {
       return generate(nodes)
     }
     val lut = new LookupTable()
     val nReplicationGroups = nodes.size/(replicationDegree + 1)
-    val szKeyRange: Int = maxKey/nReplicationGroups
+    val szKeyRange: Int = (maxKey - minKey + 1)/nReplicationGroups
     for(i <- 0 until nReplicationGroups) {
-      lut.partitions ++= (i*szKeyRange -> Set())
+      lut.partitions ++= ( minKey + i*szKeyRange -> Set() );
     }
     var itPartition = lut.partitions.iterator
     for(node <- nodes) {
@@ -81,6 +81,6 @@ object LookupTable {
       val partition = itPartition.next()
       partition._2 += node
     }
-    lut
+    return lut;
   }
 }

@@ -32,7 +32,8 @@ import se.kth.id2203.overlay._
 import se.sics.kompics.Init
 import se.sics.kompics.network.Network
 import se.sics.kompics.sl._
-import se.sics.kompics.timer.Timer;
+import se.sics.kompics.timer.Timer
+import se.kth.id2203.implemented._;
 
 class ParentComponent extends ComponentDefinition {
 
@@ -46,6 +47,11 @@ class ParentComponent extends ComponentDefinition {
     case Some(_) => create(classOf[BootstrapClient], Init.NONE); // start in client mode
     case None => create(classOf[BootstrapServer], Init.NONE); // start in server mode
   }
+  val beb = create(classOf[BasicBroadcast], Init.NONE);
+  val rb = create(classOf[EagerReliableBroadcast], Init.NONE);
+  val ble = create(classOf[GossipLeaderElection], Init.NONE);
+  //val lbspwr = create(classOf[], Init.NONE);
+  
 
   {
     connect[Timer](timer -> boot);
@@ -56,5 +62,17 @@ class ParentComponent extends ComponentDefinition {
     // KV
     connect(Routing)(overlay -> kv);
     connect[Network](net -> kv);
+    // broadcast
+    connect[Network](net -> beb);
+    connect[BestEffortBroadcast](beb -> rb);
+    connect[ReliableBroadcast](rb -> kv);
+    connect[Topology](overlay -> beb);
+    // leader election
+    connect[Network](net -> ble);
+    connect[Timer](timer -> ble);
+    connect[Topology](overlay -> ble);
+    // paxos
+    //connect[](ble -> lbspwr);
+    //connect[](lbspwr -> kv);
   }
 }
