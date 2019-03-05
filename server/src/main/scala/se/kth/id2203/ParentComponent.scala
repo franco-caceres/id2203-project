@@ -29,7 +29,6 @@ import se.kth.id2203.bootstrapping._
 import se.kth.id2203.kvstore.KVService
 import se.kth.id2203.networking.NetAddress
 import se.kth.id2203.overlay._
-import se.sics.kompics.Init
 import se.sics.kompics.network.Network
 import se.sics.kompics.sl._
 import se.sics.kompics.timer.Timer
@@ -47,9 +46,9 @@ class ParentComponent extends ComponentDefinition {
     case Some(_) => create(classOf[BootstrapClient], Init.NONE); // start in client mode
     case None => create(classOf[BootstrapServer], Init.NONE); // start in server mode
   }
-  val beb = create(classOf[BasicBroadcast], Init.NONE);
-  val rb = create(classOf[EagerReliableBroadcast], Init.NONE);
-  val ble = create(classOf[GossipLeaderElection], Init.NONE);
+  val beb = create(classOf[BasicBroadcast], Init[BasicBroadcast]());
+  val rb = create(classOf[EagerReliableBroadcast], Init[EagerReliableBroadcast]());
+  val ble = create(classOf[GossipLeaderElection], Init[GossipLeaderElection]());
   //val lbspwr = create(classOf[], Init.NONE);
   
 
