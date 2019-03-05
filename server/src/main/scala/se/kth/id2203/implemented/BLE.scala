@@ -88,7 +88,8 @@ class GossipLeaderElection(init: Init[GossipLeaderElection]) extends ComponentDe
 
   ctrl uponEvent {
     case _: Start => handle {
-      startTimer(period);
+      // FCG not implemented yet so no need to start it
+      // startTimer(period);
     }
   }
 
