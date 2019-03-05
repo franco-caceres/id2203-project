@@ -25,6 +25,7 @@ package se.kth.id2203.kvstore
 
 ;
 
+import se.kth.id2203.implemented.ReliableBroadcast
 import se.kth.id2203.networking._
 import se.kth.id2203.overlay.Routing
 import se.sics.kompics.network.Network
@@ -35,16 +36,16 @@ class KVService extends ComponentDefinition {
   //******* Ports ******
   val net = requires[Network];
   val route = requires(Routing);
+  val rb = requires[ReliableBroadcast];
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
-  val store = Map[Int, String](33 -> "foo", 65 -> "bar", 88 -> "baz")
+  val store = Map[String, String]("A" -> "foo", "B" -> "bar", "C" -> "baz")
   //******* Handlers ******
   net uponEvent {
     case NetMessage(header, op: Operation) => handle {
       op match {
-        case g: Get => {
-          val storeKey = op.key.hashCode
-          store.get(storeKey) match {
+        case _: Get => {
+          store.get(op.key) match {
             case Some(value) => trigger(NetMessage(self, header.src, op.response(OpCode.Ok, Some(value))) -> net)
             case None => trigger(NetMessage(self, header.src, op.response(OpCode.NotFound, None)) -> net)
           }
