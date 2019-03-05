@@ -47,36 +47,33 @@ import scala.util.Random;
   * @author Lars Kroll <lkroll@kth.se>
   */
 class VSOverlayManager extends ComponentDefinition {
-
   //******* Ports ******
   val route = provides(Routing);
-  val topol = provides[Topology];
+  val topo = provides[Topology];
   val boot = requires(Bootstrapping);
   val net = requires[Network];
   val timer = requires[Timer];
+
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   private var lut: Option[LookupTable] = None;
   private val replicationDegree = cfg.getValue[Int]("id2203.project.replicationDegree")
-  private val maxKey = cfg.getValue[Int]("id2203.project.maxKey")
-  private val minKey = cfg.getValue[Int]("id2203.project.minKey")
+  private val maxKey = cfg.getValue[Long]("id2203.project.maxKey")
+  private val minKey = cfg.getValue[Long]("id2203.project.minKey")
   //******* Handlers ******
   boot uponEvent {
     case GetInitialAssignments(nodes) => handle {
       log.info("Generating LookupTable...");
-      val lut = LookupTable.generate(nodes, replicationDegree, minKey, maxKey);
-      logger.debug("Generated assignments:\n$lut");
-      trigger(new InitialAssignments(lut) -> boot);
-      //provide the topology to components that require it
-      trigger( Provide_topology(nodes) -> topol );
+      val l = LookupTable.generate(nodes, replicationDegree, minKey, maxKey);
+      logger.debug(s"Generated assignments:\n$l");
+      trigger(new InitialAssignments(l) -> boot);
     }
     case Booted(assignment: LookupTable) => handle {
       log.info("Got NodeAssignment, overlay ready.");
       lut = Some(assignment);
-      //provide the topology to components that require it
-      val (_, nodesSets) = assignment.partitions.unzip;
-      val nodes = nodesSets.flatten.toSet;
-      trigger( Provide_topology(nodes) -> topol );
+      // from the set of all nodes, get only the nodes of our partition
+      val partitionNodes = lut.get.partitions.filter(x => x._2.exists(p => p == self)).head._2
+      trigger(Provide_topology(partitionNodes.toSet) -> topo);
     }
   }
 

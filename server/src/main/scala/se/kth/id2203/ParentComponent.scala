@@ -49,7 +49,7 @@ class ParentComponent extends ComponentDefinition {
   val beb = create(classOf[BasicBroadcast], Init[BasicBroadcast]());
   val rb = create(classOf[EagerReliableBroadcast], Init[EagerReliableBroadcast]());
   val ble = create(classOf[GossipLeaderElection], Init[GossipLeaderElection]());
-  //val lbspwr = create(classOf[], Init.NONE);
+  val sc = create(classOf[SequencePaxos], Init[SequencePaxos]());
   
 
   {
@@ -71,7 +71,9 @@ class ParentComponent extends ComponentDefinition {
     connect[Timer](timer -> ble);
     connect[Topology](overlay -> ble);
     // paxos
-    //connect[](ble -> lbspwr);
-    //connect[](lbspwr -> kv);
+    connect[Network](net -> sc);
+    connect[Topology](overlay -> sc);
+    connect[BallotLeaderElection](ble -> sc);
+    connect[SequenceConsensus](sc -> kv);
   }
 }

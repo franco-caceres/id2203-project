@@ -40,18 +40,17 @@ case class HeartbeatReq(round: Long, highestBallot: Long) extends KompicsEvent;
 case class HeartbeatResp(round: Long, ballot: Long) extends KompicsEvent;
 
 class GossipLeaderElection(init: Init[GossipLeaderElection]) extends ComponentDefinition {
-
   val ble = provides[BallotLeaderElection];
   val net = requires[Network];
   val timer = requires[Timer];
-  val topol = requires[Topology];
+  val topo = requires[Topology];
 
   val self = cfg.getValue[NetAddress]("id2203.project.address");
-  var topology: Set[NetAddress] = Set.empty;
+  var topology: Set[NetAddress] = Set(self);
   val delta = 1;      //the 1 second initial delta is selected groundlessly
-  val majority = (topology.size / 2) + 1;
+  var majority: Int = (topology.size / 2) + 1;
 
-  private var period = cfg.getValue[Long]("ble.simulation.delay");
+  private var period = cfg.getValue[Long]("id2203.project.ble.delay");
   private var ballots = mutable.Map.empty[NetAddress, Long];
 
   private var round = 0l;
@@ -78,7 +77,7 @@ class GossipLeaderElection(init: Init[GossipLeaderElection]) extends ComponentDe
       leader = None;
     }
     else{
-      if( !leader.isDefined || ((topBallot, topProcess) != leader.get) ){
+      if( leader.isEmpty || ((topBallot, topProcess) != leader.get) ){
         highestBallot = topBallot;
         leader = Some((topBallot, topProcess));
         trigger( BLE_Leader(topProcess, topBallot) -> ble );
@@ -86,10 +85,11 @@ class GossipLeaderElection(init: Init[GossipLeaderElection]) extends ComponentDe
     }
   }
 
-  ctrl uponEvent {
-    case _: Start => handle {
-      // FCG not implemented yet so no need to start it
-      // startTimer(period);
+  topo uponEvent {
+    case Provide_topology(nodes: Set[NetAddress]) => handle {
+      topology = nodes
+      majority = (topology.size / 2) + 1
+      startTimer(period)
     }
   }
 
@@ -123,12 +123,6 @@ class GossipLeaderElection(init: Init[GossipLeaderElection]) extends ComponentDe
       else{
         period += delta;
       }
-    }
-  }
-  
-  topol uponEvent {
-    case Provide_topology(nodes) => handle {
-      topology = nodes;
     }
   }
 }

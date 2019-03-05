@@ -63,15 +63,16 @@ object LookupTable {
     lut.partitions ++= (Int.MinValue -> nodes);
     return lut;
   }
-  def generate(nodes: Set[NetAddress], replicationDegree: Int, minKey: Int, maxKey: Int): LookupTable = {
+  def generate(nodes: Set[NetAddress], replicationDegree: Int, minKey: Long, maxKey: Long): LookupTable = {
     if(nodes.size < replicationDegree) {
       return generate(nodes)
     }
     val lut = new LookupTable()
     val nReplicationGroups = nodes.size/replicationDegree
-    val szKeyRange: Int = (maxKey - minKey + 1)/nReplicationGroups
+    val keySpaceSize = maxKey - minKey + 1
+    val keyRangeSize: Int = if ((keySpaceSize/nReplicationGroups) > Int.MaxValue.toLong) Int.MaxValue else (keySpaceSize/nReplicationGroups).toInt
     for(i <- 0 until nReplicationGroups) {
-      lut.partitions ++= ( minKey + i*szKeyRange -> Set() );
+      lut.partitions ++= ( minKey.toInt + i*keyRangeSize -> Set() );
     }
     var itPartition = lut.partitions.iterator
     for(node <- nodes) {
