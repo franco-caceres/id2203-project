@@ -68,7 +68,7 @@ object LookupTable {
       return generate(nodes)
     }
     val lut = new LookupTable()
-    val nReplicationGroups = nodes.size/(replicationDegree + 1)
+    val nReplicationGroups = nodes.size/replicationDegree
     val szKeyRange: Int = (maxKey - minKey + 1)/nReplicationGroups
     for(i <- 0 until nReplicationGroups) {
       lut.partitions ++= ( minKey + i*szKeyRange -> Set() );
