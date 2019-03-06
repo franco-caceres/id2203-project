@@ -84,7 +84,6 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
         leader = Some(l);
         nL = n;
         if(self == leader.get && nL > nProm) {
-          println("FCG I AM LEADER")
           state = (LEADER, PREPARE);
           propCmds = List.empty;
           las.clear();
@@ -93,14 +92,12 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
           acks.clear();
           lc = 0;
           others.foreach(p => {
-            println("FCG SENDING PREPARE " + NetMessage(self, p, Prepare(nL, ld, na)))
             trigger(NetMessage(self, p, Prepare(nL, ld, na)) -> net)
           });
           acks += self -> (na, suffix(va, ld));
           lds += self -> ld;
           nProm = nL;
         } else {
-          println("FCG I AM FOLLOWER")
           state = (FOLLOWER, state._2);
         }
       }
@@ -109,7 +106,6 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
 
   net uponEvent {
     case NetMessage(header, Prepare(np, ldp, n)) => handle {
-      println("FCG GOT PREPARE " + Prepare(np, ldp, n))
       val p = header.src
       if(nProm < np) {
         nProm = np;
@@ -122,7 +118,6 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
       }
     }
     case NetMessage(header, Promise(n, nap, sfxa, lda)) => handle {
-      println("FCG GOT PROMISE")
       val a = header.src
       if ((n == nL) && (state == (LEADER, PREPARE))) {
         acks += a -> (nap, sfxa);
@@ -151,7 +146,6 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
       }
     }
     case NetMessage(header, AcceptSync(xL, sfx, ldp)) => handle {
-      println("FCG GOT ACCEPTSYNC " + AcceptSync(xL, sfx, ldp))
       val p = header.src
       if ((nProm == xL) && (state == (FOLLOWER, PREPARE))) {
         na = xL;
@@ -161,7 +155,6 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
       }
     }
     case NetMessage(header, Accept(xL, c)) => handle {
-      println("FCG GOT ACCEPT " + Accept(xL, c))
       val p = header.src
       if ((nProm == xL) && (state == (FOLLOWER, ACCEPT))) {
         va = va ++ List(c);
@@ -169,7 +162,6 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
       }
     }
     case NetMessage(header, Decide(l, xL)) => handle {
-      println("FCG GOT DECIDE " + Decide(l, xL))
       val p = header.src
       if(nProm == xL) {
         while(ld < l) {
@@ -179,7 +171,6 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
       }
     }
     case NetMessage(header, Accepted(n, m)) => handle {
-      println("FCG GOT ACCEPTED")
       val a = header.src
       if ((n == nL) && (state == (LEADER, ACCEPT))) {
         las += a -> m;
