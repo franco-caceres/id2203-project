@@ -44,7 +44,8 @@ lazy val client = (project in file("client"))
       deps.log4j,
       deps.log4jSlf4j,
       deps.jline,
-      deps.fastparse
+      deps.fastparse,
+      deps.kSim
     )
   )
   .dependsOn(
@@ -58,7 +59,7 @@ lazy val deps =
     val logbackV = "1.2.3"
     val scalaLoggingV = "3.7.2"
     val scalatestV = "3.0.4"
-    val kompicsV = "1.0.0"
+    val kompicsV = "1.0.+"
     val commonUtilsV = "2.0.0"
     val scallopV = "3.1.1"
     val jlineV = "3.5.1"
@@ -110,11 +111,8 @@ lazy val compilerOptions = Seq(
 
 lazy val settings = Seq(
   scalacOptions ++= compilerOptions,
-  resolvers ++= Seq(
-    "Kompics Releases" at "http://kompics.sics.se/maven/repository/",
-    "Kompics Snapshots" at "http://kompics.sics.se/maven/snapshotrepository/",
-    Resolver.mavenLocal
-  )
+  resolvers += Resolver.jcenterRepo,
+  resolvers += Resolver.bintrayRepo("kompics", "Maven")
 )
 
 lazy val assemblySettings = Seq(

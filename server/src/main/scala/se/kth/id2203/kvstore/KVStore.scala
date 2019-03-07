@@ -60,29 +60,22 @@ class KVService extends ComponentDefinition {
 
   sc uponEvent {
     case SC_Decide(KVCommand(header, op: Operation)) => handle {
-      val reply = header.dst == self
       op match {
         case _: Get => {
-          if(reply) {
             store.get(op.key) match {
               case Some(value) => trigger(NetMessage(self, header.src, op.response(OpCode.Ok, Some(value))) -> net)
               case None => trigger(NetMessage(self, header.src, op.response(OpCode.NotFound, None)) -> net)
-            }
           }
         }
         case p: Put => {
           store(p.key) = p.value
-          if(reply) {
-            trigger(NetMessage(self, header.src, op.response(OpCode.Ok, Some(p.value))) -> net)
-          }
+            trigger(NetMessage(self, header.src, op.response(OpCode.Ok, store.get(p.key))) -> net)
         }
         case c: Cas => {
-          if(store(c.key) == c.compareValue) {
+          if(store.get(c.key).isDefined && store(c.key) == c.compareValue) {
             store(c.key) = c.setValue
           }
-          if(reply) {
-            trigger(NetMessage(self, header.src, op.response(OpCode.Ok, Some(store(c.key)))) -> net)
-          }
+          trigger(NetMessage(self, header.src, op.response(OpCode.Ok, store.get(c.key))) -> net)
         }
       }
     }

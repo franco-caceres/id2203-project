@@ -38,27 +38,30 @@ import se.sics.kompics.timer.Timer
 
 import scala.collection.mutable;
 
-class ScenarioClient extends ComponentDefinition {
-
+class ScenarioClient(init: Init[ScenarioClient]) extends ComponentDefinition {
   //******* Ports ******
   val net = requires[Network];
   val timer = requires[Timer];
+
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   val server = cfg.getValue[NetAddress]("id2203.project.bootstrap-address");
   private val pending = mutable.Map.empty[UUID, String];
+
+  val op = init match {
+    case Init(o: Operation) => o
+  }
+
   //******* Handlers ******
   ctrl uponEvent {
     case _: Start => handle {
-      val messages = SimulationResult[String]("messages").split('$');
-      for(message <- messages) {
-        val op = Get(message)
-        val routeMsg = RouteMsg(op.key, op)
-        trigger(NetMessage(self, server, routeMsg) -> net)
-        pending += (op.id -> op.key)
-        logger.info("Sending {}", op);
-        SimulationResult += (op.key -> "Sent");
-      }
+      val routeMsg = RouteMsg(op.key, op)
+      trigger(NetMessage(self, server, routeMsg) -> net)
+      pending += (op.id -> op.key)
+      val currentEvent = ExecutionEvent(System.currentTimeMillis(), call = true, op)
+      val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get)
+      history.serializedEvents = history.serializedEvents + "#" + SimulationUtils.serialize(currentEvent)
+      SimulationResult += ("history" -> SimulationUtils.serialize(history))
     }
   }
 
@@ -66,7 +69,12 @@ class ScenarioClient extends ComponentDefinition {
     case NetMessage(header, or@OperationResponse(id, status, value)) => handle {
       logger.debug(s"Got OpResponse: $or");
       pending.remove(id) match {
-        case Some(key) => SimulationResult += key -> s"$status#$value"
+        case Some(key) => {
+          val currentEvent = ExecutionEvent(System.currentTimeMillis(), call = false, op = null, or)
+          val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get)
+          history.serializedEvents = history.serializedEvents + "#" + SimulationUtils.serialize(currentEvent)
+          SimulationResult += ("history" -> SimulationUtils.serialize(history))
+        }
         case None => logger.warn("ID $id was not pending! Ignoring response.");
       }
     }
