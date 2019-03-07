@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Base64
 
 import se.kth.id2203.kvstore.{Cas, Get, Put}
+import se.kth.id2203.simulation.SimulationUtils.isLinearizable
 
 object SimulationUtils {
   def serialize(value: Any): String = {
@@ -27,14 +28,14 @@ object SimulationUtils {
   }
 
   def isMinimal(e: ExecutionEvent, h: History): Boolean = {
-    if(!e.call) {
+    if(!e.isCall) {
       return false
     }
     for(f <- h.events) {
       if(f == e) {
         return true
       }
-      if(!f.call) {
+      if(!f.isCall) {
         return false
       }
     }
@@ -42,11 +43,11 @@ object SimulationUtils {
   }
 
   def removeCallAndReturn(e: ExecutionEvent, h:History): History = {
-    if(!e.call) {
+    if(!e.isCall) {
       return h
     }
     val h2 = History(h.events.filterNot(x => {
-      if(x.call) {
+      if(x.isCall) {
         x.op.id == e.op.id
       } else {
         x.res.id == e.op.id
@@ -55,13 +56,28 @@ object SimulationUtils {
     h2
   }
 
+  def isComplete(h: History): Boolean = {
+    !h.events.exists(x => {
+      x.isCall &&
+        h.events.count(y => !y.isCall && x.op.id == y.res.id) == 0
+    })
+  }
+
+
   def isLinearizable(h: History, S: collection.mutable.Map[String, String] = collection.mutable.Map.empty): Boolean = {
+    if(!isComplete(h)) {
+      throw new IllegalArgumentException("Only checking complete histories for linearizability")
+    }
+    _isLinearizable(h, S)
+  }
+
+  def _isLinearizable(h: History, S: collection.mutable.Map[String, String] = collection.mutable.Map.empty): Boolean = {
     if(h.events.isEmpty) {
       return true
     }
     for(e <- h.events) {
       if(isMinimal(e, h)) {
-        val eRes = h.events.find(x => !x.call && x.res.id == e.op.id).get
+        val eRes = h.events.find(x => !x.isCall && x.res.id == e.op.id).get
         var originalValue = S.get(e.op.key)
         val ok: Boolean = e.op match {
           case g: Get => {
@@ -84,7 +100,7 @@ object SimulationUtils {
             expected == actual
           }
         }
-        if(ok && isLinearizable(removeCallAndReturn(e, h), S)) {
+        if(ok && _isLinearizable(removeCallAndReturn(e, h), S)) {
           return true
         } else {
           if(originalValue.isEmpty) {

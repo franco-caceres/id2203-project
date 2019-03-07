@@ -58,7 +58,7 @@ class ScenarioClient(init: Init[ScenarioClient]) extends ComponentDefinition {
       val routeMsg = RouteMsg(op.key, op)
       trigger(NetMessage(self, server, routeMsg) -> net)
       pending += (op.id -> op.key)
-      val currentEvent = ExecutionEvent(System.currentTimeMillis(), call = true, op)
+      val currentEvent = ExecutionEvent(System.currentTimeMillis(), isCall = true, op)
       val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get)
       history.serializedEvents = history.serializedEvents + "#" + SimulationUtils.serialize(currentEvent)
       SimulationResult += ("history" -> SimulationUtils.serialize(history))
@@ -70,7 +70,7 @@ class ScenarioClient(init: Init[ScenarioClient]) extends ComponentDefinition {
       logger.debug(s"Got OpResponse: $or");
       pending.remove(id) match {
         case Some(key) => {
-          val currentEvent = ExecutionEvent(System.currentTimeMillis(), call = false, op = null, or)
+          val currentEvent = ExecutionEvent(System.currentTimeMillis(), isCall = false, op = null, or)
           val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get)
           history.serializedEvents = history.serializedEvents + "#" + SimulationUtils.serialize(currentEvent)
           SimulationResult += ("history" -> SimulationUtils.serialize(history))
