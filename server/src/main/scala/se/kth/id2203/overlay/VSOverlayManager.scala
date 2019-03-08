@@ -128,11 +128,9 @@ class VSOverlayManager extends ComponentDefinition {
 
   epfd uponEvent {
     case Suspect(p) => handle {
-      println("FCG GOT SUSPECT " + p)
       suspected += p
     }
     case Restore(p) => handle {
-      println("FCG GOT RESTORE " + p)
       suspected -= p
     }
   }
