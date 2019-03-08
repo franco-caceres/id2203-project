@@ -63,6 +63,13 @@ object SimulationUtils {
     })
   }
 
+  def removeIncompleteOperations(h: History): History = {
+    val completeOperations = h.events.filter(x => {
+        !x.isCall || (x.isCall &&
+        h.events.count(y => !y.isCall && x.op.id == y.res.id) == 1)
+    })
+    History(completeOperations)
+  }
 
   def isLinearizable(h: History, S: collection.mutable.Map[String, String] = collection.mutable.Map.empty): Boolean = {
     if(!isComplete(h)) {

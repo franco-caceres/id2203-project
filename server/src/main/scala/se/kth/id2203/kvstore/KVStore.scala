@@ -32,7 +32,9 @@ import se.sics.kompics.KompicsEvent
 import se.sics.kompics.network.Network
 import se.sics.kompics.sl._;
 
-case class KVCommand(header: NetHeader, op: Operation) extends RSM_Command with KompicsEvent
+case class KVCommand(header: NetHeader, op: Operation) extends RSM_Command with KompicsEvent {
+  override def isRead: Boolean = op.isInstanceOf[Get]
+}
 
 class KVService extends ComponentDefinition {
   //******* Ports ******

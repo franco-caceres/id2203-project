@@ -33,6 +33,8 @@ import se.kth.id2203.networking._
 import se.sics.kompics.network.Address
 import se.sics.kompics.simulator.adaptor.Operation1
 import se.sics.kompics.simulator.events.system.{ChangeNetworkModelEvent, KillNodeEvent}
+import se.sics.kompics.simulator.network.PartitionMapper
+import se.sics.kompics.simulator.network.identifier.{Identifier, IdentifierExtractor}
 import se.sics.kompics.simulator.network.impl.NetworkModels
 import se.sics.kompics.simulator.run.LauncherComp
 import se.sics.kompics.simulator.{adaptor, SimulationScenario => JSimulationScenario}
@@ -74,6 +76,20 @@ class LinearizabilityTest extends FlatSpec with Matchers {
     println(history)
     SimulationUtils.isComplete(history) should be (false)
   }
+
+  "Time lease with partition" should "allow reads but no modifications while leader is separated from the other replicas," +
+    "Meanwhile the isolated set of replicas (2) have to wait until the lease expires to achieve their own quorum." in {
+    val seed = 123l
+    JSimulationScenario.setSeed(seed)
+    val simpleBootScenario = Scenarios.scenario4(6)
+    SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
+    simpleBootScenario.simulate(classOf[LauncherComp]);
+    val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
+    println(history)
+    val completeHistory = SimulationUtils.removeIncompleteOperations(history)
+    println(completeHistory)
+    SimulationUtils.isLinearizable(completeHistory) should be (true)
+  }
 }
 
 case class ExecutionEvent(ts: Long, isCall: Boolean, op: Operation = null, res: OperationResponse = null) extends Serializable
@@ -106,6 +122,7 @@ object Scenarios {
           "id2203.project.replicationDegree" -> 3,
           "id2203.project.minKey" -> Int.MinValue,
           "id2203.project.maxKey" -> Int.MaxValue,
+          "id2203.project.useTimeLease" -> false,
           "id2203.project.ble.delay" -> 100,
           "id2203.project.epfd.delay" -> 100)
     } else {
@@ -114,8 +131,35 @@ object Scenarios {
         "id2203.project.bootstrap-address" -> intToServerAddress(1),
         "id2203.project.minKey" -> Int.MinValue,
         "id2203.project.maxKey" -> Int.MaxValue,
+        "id2203.project.useTimeLease" -> false,
         "id2203.project.ble.delay" -> 100,
         "id2203.project.epfd.delay" -> 100)
+    };
+    StartNode(selfAddr, Init.none[ParentComponent], conf);
+  }
+  val startServerTimeLeaseOp = Op { (self: Integer) =>
+    val selfAddr = intToServerAddress(self)
+    val conf = if (isBootstrap(self)) {
+      // don't put this at the bootstrap server, or it will act as a bootstrap client
+      Map("id2203.project.address" -> selfAddr,
+        "id2203.project.bootThreshold" -> 6,
+        "id2203.project.replicationDegree" -> 3,
+        "id2203.project.minKey" -> Int.MinValue,
+        "id2203.project.maxKey" -> Int.MaxValue,
+        "id2203.project.useTimeLease" -> true,
+        "id2203.project.ble.delay" -> 40,
+        "id2203.project.epfd.delay" -> 40)
+    } else {
+      Map(
+        "id2203.project.address" -> selfAddr,
+        "id2203.project.bootstrap-address" -> intToServerAddress(1),
+        "id2203.project.minKey" -> Int.MinValue,
+        "id2203.project.maxKey" -> Int.MaxValue,
+        "id2203.project.leaseDuration" -> 10000,
+        "id2203.project.clock.error" -> 1,
+        "id2203.project.useTimeLease" -> true,
+        "id2203.project.ble.delay" -> 40,
+        "id2203.project.epfd.delay" -> 40)
     };
     StartNode(selfAddr, Init.none[ParentComponent], conf);
   }
@@ -133,11 +177,25 @@ object Scenarios {
       "id2203.project.bootstrap-address" -> intToServerAddress(1));
     StartNode(selfAddr, Init[ScenarioClient](Get("test")), conf);
   }
+  val startGetClientWithTargetOp = Op { (self: Integer, target: Integer) =>
+    val selfAddr = intToClientAddress(self)
+    val conf = Map(
+      "id2203.project.address" -> selfAddr,
+      "id2203.project.bootstrap-address" -> intToServerAddress(target));
+    StartNode(selfAddr, Init[ScenarioClient](Get("test")), conf);
+  }
   val startPutClientOp = Op { (self: Integer, value: Integer) =>
     val selfAddr = intToClientAddress(self)
     val conf = Map(
       "id2203.project.address" -> selfAddr,
       "id2203.project.bootstrap-address" -> intToServerAddress(1));
+    StartNode(selfAddr, Init[ScenarioClient](Put("test", value.toString)), conf);
+  }
+  val startPutClientWithTargetOp = Op { (self: Integer, value: Integer, target: Integer) =>
+    val selfAddr = intToClientAddress(self)
+    val conf = Map(
+      "id2203.project.address" -> selfAddr,
+      "id2203.project.bootstrap-address" -> intToServerAddress(target));
     StartNode(selfAddr, Init[ScenarioClient](Put("test", value.toString)), conf);
   }
   val startCasClientOp = Op { (self: Integer, compareValue: Integer, setValue: Integer) =>
@@ -217,6 +275,57 @@ object Scenarios {
       .andThen(3.seconds)
       .afterTermination(startGetClient)
       .andThen(5.seconds)
+      .afterTermination(Terminate)
+  }
+
+  def scenario4(servers: Int): JSimulationScenario = {
+    val uniformLatency: () => adaptor.Operation[ChangeNetworkModelEvent] = () => Op.apply((_: Unit) => ChangeNetwork(NetworkModels.withConstantDelay(10)))
+    val separate4And5Setup: () => adaptor.Operation[ChangeNetworkModelEvent] =
+      () => Op.apply(
+        (_: Unit) =>
+          ChangeNetwork(
+            NetworkModels.withPartitionedModel(
+              (adr: Address) => (_: Int) => adr.getIp.toString.split('.').last.toInt,
+              NetworkModels.withConstantDelay(10),
+              (nodeId: Identifier) => {
+                // isolate servers whose IP end in .4 and .5
+                if (Seq(4, 5).contains(nodeId.partition(1))) {
+                  2
+                } else {
+                  1
+                }
+              }
+            )
+          )
+      )
+    val networkSetup = raise(1, uniformLatency()).arrival(constant(0))
+    val separate4And5 = raise(1, separate4And5Setup()).arrival(constant(0))
+    val startClusterTimeLease = raise(servers, startServerTimeLeaseOp, 1.toN).arrival(constant(1.second))
+    val startGetClient = raise(1, startGetClientOp, 1.toN).arrival(constant(0.second))
+    val startPut1Client = raise(1, startPutClientOp, 2.toN, 1.toN).arrival(constant(0.second))
+    val startPut2Client = raise(1, startPutClientOp, 3.toN, 2.toN).arrival(constant(0.second))
+    val startPut3ClientInPartitionWith4And5 = raise(1, startPutClientWithTargetOp, 4.toN, 3.toN, 5.toN).arrival(constant(0.second))
+    val startPut4Client = raise(1, startPutClientOp, 4.toN, 4.toN).arrival(constant(0.second))
+
+    networkSetup
+      .andThen(0.seconds)
+      .afterTermination(startClusterTimeLease)
+      .andThen(10.seconds) // 6 is leader
+      .afterTermination(startPut1Client) // put(test, 1) using leader
+      .andThen(1.seconds)
+      .afterTermination(separate4And5) // partition network: all - {4, 5} and {4,5}
+      .andThen(1.seconds)
+      .afterTermination(startGetClient) // get(test) from isolated leader (server 6) holding lease
+      .inParallel(startPut2Client) // call to server 6 (leader with (LEADER, ACCEPT)) with put(test, 2), which holds it until connectivity returns, cannot proceed without majority
+      .inParallel(startPut3ClientInPartitionWith4And5) // call to server 5 (isolated along with 4) from client in same partition with put(test, 2), which does not go through until lease is released
+      .andThen(10.seconds)
+      .afterTermination(networkSetup) // connectivity is restored
+      .andThen(3.seconds)
+      .afterTermination(startGetClient)
+      .andThen(3.seconds)
+      .afterTermination(startPut4Client)
+      .inParallel(startGetClient)
+      .andThen(3.seconds)
       .afterTermination(Terminate)
   }
 

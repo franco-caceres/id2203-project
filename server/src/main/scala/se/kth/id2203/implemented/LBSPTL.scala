@@ -2,41 +2,17 @@ package se.kth.id2203.implemented;
 
 import se.kth.id2203.implemented
 import se.kth.id2203.networking.{NetAddress, NetMessage}
+import se.sics.kompics.KompicsEvent
 import se.sics.kompics.network.Network
 import se.sics.kompics.sl._
-import se.sics.kompics.{KompicsEvent, Start}
+import se.sics.kompics.timer.{ScheduleTimeout, Timeout, Timer}
 
 import scala.collection.mutable
 
-trait RSM_Command {
-  def isRead: Boolean
-}
-case class SC_Propose(value: RSM_Command) extends KompicsEvent;
-case class SC_Decide(value: RSM_Command) extends KompicsEvent;
+case class Nack(n: Long) extends KompicsEvent
+case class ReplyToNackTimeout(p: NetAddress, nL: Long, ld: Int, na: Long, timeout: ScheduleTimeout) extends Timeout(timeout)
 
-class SequenceConsensus extends Port {
-  request[SC_Propose];
-  indication[SC_Decide];
-}
-
-case class Prepare(nL: Long, ld: Int, na: Long) extends KompicsEvent;
-case class Promise(nL: Long, na: Long, suffix: List[RSM_Command], ld: Int) extends KompicsEvent;
-case class AcceptSync(nL: Long, suffix: List[RSM_Command], ld: Int) extends KompicsEvent;
-case class Accept(nL: Long, c: RSM_Command) extends KompicsEvent;
-case class Accepted(nL: Long, m: Int) extends KompicsEvent;
-case class Decide(ld: Int, nL: Long) extends KompicsEvent;
-
-object State extends Enumeration {
-  type State = Value
-  val PREPARE, ACCEPT, UNKNOWN = Value
-}
-
-object Role extends Enumeration {
-  type Role = Value
-  val LEADER, FOLLOWER = Value
-}
-
-class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
+class SequencePaxosTimeLease(init: Init[SequencePaxosTimeLease]) extends ComponentDefinition {
   def suffix(s: List[RSM_Command], l: Int): List[RSM_Command] = {
     s.drop(l)
   }
@@ -44,7 +20,7 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
   def prefix(s: List[RSM_Command], l: Int): List[RSM_Command] = {
     s.take(l)
   }
-  
+
   import Role._
   import State._
 
@@ -52,6 +28,7 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
   val ble = requires[BallotLeaderElection];
   val net = requires[Network];
   val topo = requires[Topology]
+  val timer = requires[Timer];
 
   val self = cfg.getValue[NetAddress]("id2203.project.address");
   var pi: Set[NetAddress] = Set(self)
@@ -72,6 +49,39 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
   var lc = 0;
   val acks = mutable.Map.empty[NetAddress, (Long, List[RSM_Command])];
 
+  // lease
+  val leaseDuration = cfg.getValue[Long]("id2203.project.leaseDuration")
+  val clockError = cfg.getValue[Long]("id2203.project.clock.error")
+  var tprom = 0l
+  var tl = 0l
+  var hasGivenAnyLease = false
+  var nacks = 0
+
+  def clockTime: Long = {
+    System.currentTimeMillis()
+  }
+
+  def canGiveLease(n: Long): Boolean = {
+    if(n <= nProm) {
+      return false
+    }
+    if(!hasGivenAnyLease) {
+      true
+    } else {
+      (clockTime - tprom) > leaseDuration*(1000 + clockError)/1000.0
+    }
+  }
+
+  def canReplyWithLocalState(c: RSM_Command): Boolean = {
+    if(!c.isRead) {
+      return false
+    }
+    if(state != (LEADER, ACCEPT)) {
+      return false
+    }
+    (clockTime - tl) < leaseDuration*(1000 - clockError)/1000.0
+  }
+
   topo uponEvent {
     case PartitionTopology(nodes: Set[NetAddress]) => handle {
       pi = nodes
@@ -86,6 +96,7 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
         leader = Some(l);
         nL = n;
         if(self == leader.get && nL > nProm) {
+          println(clockTime/1000)
           state = (LEADER, PREPARE);
           propCmds = List.empty;
           las.clear();
@@ -93,6 +104,8 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
           lds.clear();
           acks.clear();
           lc = 0;
+          tl = clockTime
+          nacks = 0
           others.foreach(p => {
             trigger(NetMessage(self, p, Prepare(nL, ld, na)) -> net)
           });
@@ -109,7 +122,9 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
   net uponEvent {
     case NetMessage(header, Prepare(np, ldp, n)) => handle {
       val p = header.src
-      if(nProm < np) {
+      if(canGiveLease(np)) {
+        hasGivenAnyLease = true
+        tprom = clockTime
         nProm = np;
         state = (FOLLOWER, PREPARE);
         var sfx = List.empty[RSM_Command];
@@ -117,6 +132,11 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
           sfx = suffix(va, ldp);
         }
         trigger(NetMessage(self, p, Promise(np, na, sfx, ld)) -> net);
+      } else {
+        // if the only reason a promise wasn't given is the lease violation, then ask to try again later
+        if(np > nProm && (clockTime - tprom) <= leaseDuration*(1000 + clockError)/1000.0) {
+          trigger(NetMessage(self, p, Nack(np)) -> net)
+        }
       }
     }
     case NetMessage(header, Promise(n, nap, sfxa, lda)) => handle {
@@ -145,6 +165,14 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
         if(lc != 0) {
           trigger(NetMessage(self, a, Decide(ld, nL)) -> net);
         }
+      }
+    }
+    case NetMessage(header, Nack(n)) => handle {
+      val p = header.src
+      if(n == nL && state == (LEADER, PREPARE)) {
+        val scheduledTimeout = new ScheduleTimeout(500)
+        scheduledTimeout.setTimeoutEvent(ReplyToNackTimeout(p, nL, ld, na, scheduledTimeout))
+        trigger(scheduledTimeout -> timer)
       }
     }
     case NetMessage(header, AcceptSync(xL, sfx, ldp)) => handle {
@@ -188,18 +216,28 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
     }
   }
 
+  timer uponEvent {
+    case ReplyToNackTimeout(p, _nL, _ld, _na, _) => handle {
+      trigger(NetMessage(self, p, Prepare(_nL, _ld, _na)) -> net)
+    }
+  }
+
   sc uponEvent {
     case SC_Propose(c) => handle {
-      if (state == (LEADER, PREPARE)) {
-        propCmds = propCmds ++ List(c);
-      } else if (state == (LEADER, ACCEPT)) {
-        va = va ++ List(c);
-        las(self) = las(self) + 1;
-        others.foreach(p => {
-          if(lds.exists(x => x._1 == p)) {
-            trigger(NetMessage(self, p, Accept(nL, c)) -> net);
-          }
-        });
+      if(canReplyWithLocalState(c)) {
+        trigger(SC_Decide(c) -> sc)
+      } else {
+        if (state == (LEADER, PREPARE)) {
+          propCmds = propCmds ++ List(c);
+        } else if (state == (LEADER, ACCEPT)) {
+          va = va ++ List(c);
+          las(self) = las(self) + 1;
+          others.foreach(p => {
+            if(lds.exists(x => x._1 == p)) {
+              trigger(NetMessage(self, p, Accept(nL, c)) -> net);
+            }
+          });
+        }
       }
     }
   }

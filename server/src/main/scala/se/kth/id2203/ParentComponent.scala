@@ -49,10 +49,14 @@ class ParentComponent extends ComponentDefinition {
   val beb = create(classOf[BasicBroadcast], Init[BasicBroadcast]());
   val rb = create(classOf[EagerReliableBroadcast], Init[EagerReliableBroadcast]());
   val ble = create(classOf[GossipLeaderElection], Init[GossipLeaderElection]());
-  val sc = create(classOf[SequencePaxos], Init[SequencePaxos]());
+  val sc = cfg.readValue[Boolean]("id2203.project.useTimeLease") match {
+    case Some(true) => create(classOf[SequencePaxosTimeLease], Init[SequencePaxosTimeLease]())
+    case _ => create(classOf[SequencePaxos], Init[SequencePaxos]())
+  }
   val epfd = create(classOf[EPFD], Init[EPFD]())
 
   {
+    // Bootstrapping
     connect[Timer](timer -> boot);
     connect[Network](net -> boot);
     // Overlay
@@ -76,6 +80,10 @@ class ParentComponent extends ComponentDefinition {
     connect[Topology](overlay -> sc);
     connect[BallotLeaderElection](ble -> sc);
     connect[SequenceConsensus](sc -> kv);
+    cfg.readValue[Boolean]("id2203.project.useTimeLease") match {
+      case Some(true) => connect[Timer](timer -> sc);
+      case _ =>
+    }
     // epfd
     connect[Topology](overlay -> epfd)
     connect[Network](net -> epfd)
