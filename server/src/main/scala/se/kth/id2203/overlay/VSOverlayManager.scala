@@ -32,7 +32,6 @@ import se.sics.kompics.sl._
 import se.sics.kompics.timer.Timer
 import se.kth.id2203.implemented._
 
-import scala.sys.process.processInternal.OutputStream
 import scala.util.Random;
 
 /**
