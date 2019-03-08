@@ -71,17 +71,19 @@ object LookupTable {
     val nReplicationGroups = nodes.size/replicationDegree
     val keySpaceSize = maxKey - minKey + 1
     val keyRangeSize: Int = if ((keySpaceSize/nReplicationGroups) > Int.MaxValue.toLong) Int.MaxValue else (keySpaceSize/nReplicationGroups).toInt
+    val nodesAsList = nodes.toList.sortWith((x, y) => {
+      val xIp = x.getIp().toString
+      val yIp = y.getIp().toString
+      xIp.split('.').last.toInt < yIp.split('.').last.toInt
+    })
+    var nodeIdx = 0
     for(i <- 0 until nReplicationGroups) {
       lut.partitions ++= ( minKey.toInt + i*keyRangeSize -> Set() );
-    }
-    var itPartition = lut.partitions.iterator
-    for(node <- nodes) {
-      if(!itPartition.hasNext) {
-        itPartition = lut.partitions.iterator
+      for(_ <- 0 until replicationDegree) {
+        lut.partitions(lut.partitions.lastKey) += nodesAsList(nodeIdx)
+        nodeIdx += 1
       }
-      val partition = itPartition.next()
-      partition._2 += node
     }
-    return lut;
+    lut
   }
 }
