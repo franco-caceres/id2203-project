@@ -77,7 +77,6 @@ class EPFD(epfdInit: Init[EPFD]) extends ComponentDefinition {
     case FullTopology(nodes) => handle {
       topology = nodes
       alive = nodes
-      trigger(Suspect(self) -> epfd)
       startTimer(period)
     }
   }

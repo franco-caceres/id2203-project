@@ -30,9 +30,9 @@ import se.kth.id2203.networking._
 import se.sics.kompics.network.Network
 import se.sics.kompics.sl._
 import se.sics.kompics.timer.Timer
+import se.kth.id2203.implemented._
 
-import se.kth.id2203.implemented._;
-
+import scala.sys.process.processInternal.OutputStream
 import scala.util.Random;
 
 /**
@@ -60,6 +60,8 @@ class VSOverlayManager extends ComponentDefinition {
   private var lut: Option[LookupTable] = None;
   private val replicationDegree = cfg.getValue[Int]("id2203.project.replicationDegree")
   private val maxKey = cfg.getValue[Long]("id2203.project.maxKey")
+  private val isSimulation = cfg.getValue[Boolean]("id2203.project.isSimulation")
+  private val simulationOutput = cfg.getValue[OutputStream]("id2203.project.simulationOutput")
   private val minKey = cfg.getValue[Long]("id2203.project.minKey")
   var suspected = Set[NetAddress]()
 
@@ -128,6 +130,9 @@ class VSOverlayManager extends ComponentDefinition {
 
   epfd uponEvent {
     case Suspect(p) => handle {
+      if(isSimulation) {
+        simulationOutput.write("suspeted("+p+")".getBytes)
+      }
       suspected += p
     }
     case Restore(p) => handle {
