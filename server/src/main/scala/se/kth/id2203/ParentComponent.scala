@@ -35,10 +35,10 @@ import se.sics.kompics.timer.Timer
 import se.kth.id2203.implemented._;
 
 class ParentComponent extends ComponentDefinition {
-
   //******* Ports ******
   val net = requires[Network];
   val timer = requires[Timer];
+
   //******* Children ******
   val overlay = create(classOf[VSOverlayManager], Init.NONE);
   val kv = create(classOf[KVService], Init.NONE);
@@ -50,7 +50,7 @@ class ParentComponent extends ComponentDefinition {
   val rb = create(classOf[EagerReliableBroadcast], Init[EagerReliableBroadcast]());
   val ble = create(classOf[GossipLeaderElection], Init[GossipLeaderElection]());
   val sc = create(classOf[SequencePaxos], Init[SequencePaxos]());
-  
+  val epfd = create(classOf[EPFD], Init[EPFD]())
 
   {
     connect[Timer](timer -> boot);
@@ -58,6 +58,7 @@ class ParentComponent extends ComponentDefinition {
     // Overlay
     connect(Bootstrapping)(boot -> overlay);
     connect[Network](net -> overlay);
+    connect[EventuallyPerfectFailureDetector](epfd -> overlay)
     // KV
     connect(Routing)(overlay -> kv);
     connect[Network](net -> kv);
@@ -75,5 +76,9 @@ class ParentComponent extends ComponentDefinition {
     connect[Topology](overlay -> sc);
     connect[BallotLeaderElection](ble -> sc);
     connect[SequenceConsensus](sc -> kv);
+    // epfd
+    connect[Topology](overlay -> epfd)
+    connect[Network](net -> epfd)
+    connect[Timer](timer -> epfd)
   }
 }

@@ -86,7 +86,7 @@ class GossipLeaderElection(init: Init[GossipLeaderElection]) extends ComponentDe
   }
 
   topo uponEvent {
-    case Provide_topology(nodes: Set[NetAddress]) => handle {
+    case PartitionTopology(nodes: Set[NetAddress]) => handle {
       topology = nodes
       majority = (topology.size / 2) + 1
       startTimer(period)

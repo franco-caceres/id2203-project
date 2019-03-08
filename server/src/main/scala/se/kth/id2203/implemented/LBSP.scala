@@ -71,7 +71,7 @@ class SequencePaxos(init: Init[SequencePaxos]) extends ComponentDefinition {
   val acks = mutable.Map.empty[NetAddress, (Long, List[RSM_Command])];
 
   topo uponEvent {
-    case Provide_topology(nodes: Set[NetAddress]) => handle {
+    case PartitionTopology(nodes: Set[NetAddress]) => handle {
       pi = nodes
       others = pi - self
       majority = (pi.size / 2) + 1

@@ -53,6 +53,7 @@ class VSOverlayManager extends ComponentDefinition {
   val boot = requires(Bootstrapping);
   val net = requires[Network];
   val timer = requires[Timer];
+  val epfd = requires[EventuallyPerfectFailureDetector]
 
   //******* Fields ******
   val self = cfg.getValue[NetAddress]("id2203.project.address");
@@ -60,6 +61,8 @@ class VSOverlayManager extends ComponentDefinition {
   private val replicationDegree = cfg.getValue[Int]("id2203.project.replicationDegree")
   private val maxKey = cfg.getValue[Long]("id2203.project.maxKey")
   private val minKey = cfg.getValue[Long]("id2203.project.minKey")
+  var suspected = Set[NetAddress]()
+
   //******* Handlers ******
   boot uponEvent {
     case GetInitialAssignments(nodes) => handle {
@@ -73,7 +76,9 @@ class VSOverlayManager extends ComponentDefinition {
       lut = Some(assignment);
       // from the set of all nodes, get only the nodes of our partition
       val partitionNodes = lut.get.partitions.filter(x => x._2.exists(p => p == self)).head._2
-      trigger(Provide_topology(partitionNodes.toSet) -> topo);
+      trigger(PartitionTopology(partitionNodes.toSet) -> topo)
+      val allNodes = lut.get.partitions.toSeq.flatMap(x => x._2).toSet
+      trigger(FullTopology(allNodes) -> topo)
     }
   }
 
@@ -81,10 +86,19 @@ class VSOverlayManager extends ComponentDefinition {
     case NetMessage(header, RouteMsg(key, msg)) => handle {
       val nodes = lut.get.lookup(key);
       assert(!nodes.isEmpty);
-      val i = Random.nextInt(nodes.size);
-      val target = nodes.drop(i).head;
-      log.info(s"Forwarding message for key $key to $target");
-      trigger(NetMessage(header.src, target, msg) -> net);
+      // if current node can answer request, skip forwarding
+      if(nodes.exists(x => x == self)) {
+        trigger(NetMessage(header.src, self, msg) -> net);
+      } else {
+        // forward only to a node that is not suspected
+        val aliveNodes = nodes.filterNot(x => suspected.contains(x))
+        if(aliveNodes.nonEmpty) {
+          val i = Random.nextInt(aliveNodes.size);
+          val target = aliveNodes.drop(i).head;
+          log.info(s"Forwarding message for key $key to $target");
+          trigger(NetMessage(header.src, target, msg) -> net);
+        }
+      }
     }
     case NetMessage(header, msg: Connect) => handle {
       lut match {
@@ -102,10 +116,24 @@ class VSOverlayManager extends ComponentDefinition {
     case RouteMsg(key, msg) => handle {
       val nodes = lut.get.lookup(key);
       assert(!nodes.isEmpty);
-      val i = Random.nextInt(nodes.size);
-      val target = nodes.drop(i).head;
-      log.info(s"Routing message for key $key to $target");
-      trigger(NetMessage(self, target, msg) -> net);
+      val aliveNodes = nodes.filterNot(x => suspected.contains(x))
+      if(aliveNodes.nonEmpty) {
+        val i = Random.nextInt(aliveNodes.size);
+        val target = nodes.drop(i).head;
+        log.info(s"Forwarding message for key $key to $target");
+        trigger(NetMessage(self, target, msg) -> net);
+      }
+    }
+  }
+
+  epfd uponEvent {
+    case Suspect(p) => handle {
+      println("FCG GOT SUSPECT " + p)
+      suspected += p
+    }
+    case Restore(p) => handle {
+      println("FCG GOT RESTORE " + p)
+      suspected -= p
     }
   }
 }

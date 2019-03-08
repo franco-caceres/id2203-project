@@ -45,7 +45,7 @@ class LinearizabilityTest extends FlatSpec with Matchers {
   "Parallel GET, PUT, and CAS" should "be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = Scenarios.scenario1(3)
+    val simpleBootScenario = Scenarios.scenario1(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
     simpleBootScenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
@@ -56,25 +56,23 @@ class LinearizabilityTest extends FlatSpec with Matchers {
   "GET after a failure still works and" should "be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = Scenarios.scenario2(3)
+    val simpleBootScenario = Scenarios.scenario2(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
     simpleBootScenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
     println(history)
-    // pending failure detector
-    //SimulationUtils.isLinearizable(history) should be (true)
+    SimulationUtils.isLinearizable(history) should be (true)
   }
 
   "GET after 2 failures (no quorum attainable)" should "not complete" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = Scenarios.scenario3(3)
+    val simpleBootScenario = Scenarios.scenario3(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
     simpleBootScenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
     println(history)
-    // pending failure detector
-    //SimulationUtils.isComplete(history) should be (false)
+    SimulationUtils.isComplete(history) should be (false)
   }
 }
 
@@ -104,18 +102,20 @@ object Scenarios {
     val conf = if (isBootstrap(self)) {
       // don't put this at the bootstrap server, or it will act as a bootstrap client
       Map("id2203.project.address" -> selfAddr,
-          "id2203.project.bootThreshold" -> 3,
+          "id2203.project.bootThreshold" -> 6,
           "id2203.project.replicationDegree" -> 3,
           "id2203.project.minKey" -> Int.MinValue,
           "id2203.project.maxKey" -> Int.MaxValue,
-          "id2203.project.ble.delay" -> 20)
+          "id2203.project.ble.delay" -> 100,
+          "id2203.project.epfd.delay" -> 100)
     } else {
       Map(
         "id2203.project.address" -> selfAddr,
         "id2203.project.bootstrap-address" -> intToServerAddress(1),
         "id2203.project.minKey" -> Int.MinValue,
         "id2203.project.maxKey" -> Int.MaxValue,
-        "id2203.project.ble.delay" -> 20)
+        "id2203.project.ble.delay" -> 100,
+        "id2203.project.epfd.delay" -> 100)
     };
     StartNode(selfAddr, Init.none[ParentComponent], conf);
   }
@@ -183,7 +183,7 @@ object Scenarios {
     val startCluster = raise(servers, startServerOp, 1.toN).arrival(constant(1.second))
     val startGetClient = raise(1, startGetClientOp, 1.toN).arrival(constant(1.second))
     val startPutClient = raise(1, startPutClientOp, 2.toN, 1.toN).arrival(constant(1.second))
-    val killServer = raise(1, killServerOp, 1.toN).arrival(constant(0.seconds))
+    val killServer = raise(1, killServerOp, 4.toN).arrival(constant(0.seconds))
 
     networkSetup
       .andThen(0.seconds)
@@ -203,8 +203,8 @@ object Scenarios {
     val startCluster = raise(servers, startServerOp, 1.toN).arrival(constant(1.second))
     val startGetClient = raise(1, startGetClientOp, 1.toN).arrival(constant(1.second))
     val startPutClient = raise(1, startPutClientOp, 2.toN, 1.toN).arrival(constant(1.second))
-    val killServer1 = raise(1, killServerOp, 1.toN).arrival(constant(0.seconds))
-    val killServer2 = raise(1, killServerOp, 2.toN).arrival(constant(0.seconds))
+    val killServer1 = raise(1, killServerOp, 4.toN).arrival(constant(0.seconds))
+    val killServer2 = raise(1, killServerOp, 5.toN).arrival(constant(0.seconds))
 
     networkSetup
       .andThen(0.seconds)

@@ -6,7 +6,9 @@ import se.sics.kompics.{KompicsEvent}
 
 //this port is used to provide the system's current topology
 class Topology extends Port {
-    indication[Provide_topology];
+    indication[PartitionTopology]
+    indication[FullTopology]
 }
 
-case class Provide_topology(nodes: Set[NetAddress]) extends KompicsEvent;
+case class PartitionTopology(nodes: Set[NetAddress]) extends KompicsEvent;
+case class FullTopology(nodes: Set[NetAddress]) extends KompicsEvent;

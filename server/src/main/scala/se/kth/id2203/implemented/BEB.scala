@@ -42,7 +42,7 @@ class BasicBroadcast(init: Init[BasicBroadcast]) extends ComponentDefinition {
   }
   
   topo uponEvent {
-    case Provide_topology(nodes) => handle {
+    case PartitionTopology(nodes) => handle {
       topology = nodes
     }
   }
