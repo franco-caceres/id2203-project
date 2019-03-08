@@ -147,8 +147,6 @@ object Scenarios {
         "id2203.project.replicationDegree" -> 3,
         "id2203.project.minKey" -> Int.MinValue,
         "id2203.project.maxKey" -> Int.MaxValue,
-        "id2203.project.isSimulation" -> true,
-        "id2203.project.simulationOutput" -> true,
         "id2203.project.useTimeLease" -> true,
         "id2203.project.ble.delay" -> 40,
         "id2203.project.epfd.delay" -> 40)
@@ -158,10 +156,6 @@ object Scenarios {
       "id2203.project.minKey" -> Int.MinValue,
       "id2203.project.maxKey" -> Int.MaxValue,
       "id2203.project.leaseDuration" -> 10000,
-      "id2203.project.isSimulation" -> true,
-      "id2203.project.simulationOutput" -> new OutputStreamWriter() {
-
-      },
       "id2203.project.clock.error" -> 1,
       "id2203.project.useTimeLease" -> true,
       "id2203.project.ble.delay" -> 40,
