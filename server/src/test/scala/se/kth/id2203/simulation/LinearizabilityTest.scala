@@ -23,7 +23,6 @@
  */
 package se.kth.id2203.simulation
 
-import java.io.{ObjectOutputStream, OutputStream, OutputStreamWriter, PrintStream}
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Random
 
@@ -38,9 +37,11 @@ import se.sics.kompics.simulator.network.PartitionMapper
 import se.sics.kompics.simulator.network.identifier.{Identifier, IdentifierExtractor}
 import se.sics.kompics.simulator.network.impl.NetworkModels
 import se.sics.kompics.simulator.run.LauncherComp
+import se.sics.kompics.simulator.util.GlobalView
 import se.sics.kompics.simulator.{adaptor, SimulationScenario => JSimulationScenario}
 import se.sics.kompics.sl._
 import se.sics.kompics.sl.simulator._
+import se.sics.kompics.network.{Network, Address, Header, Msg, Transport};
 
 import scala.concurrent.duration._
 
@@ -48,7 +49,7 @@ class LinearizabilityTest extends FlatSpec with Matchers {
   "Parallel GET, PUT, and CAS" should "be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = Scenarios.scenario1(6)
+    val simpleBootScenario = LinearizabilityScenarios.scenario1(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
     simpleBootScenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
@@ -59,7 +60,7 @@ class LinearizabilityTest extends FlatSpec with Matchers {
   "GET after a failure still works and" should "be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = Scenarios.scenario2(6)
+    val simpleBootScenario = LinearizabilityScenarios.scenario2(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
     simpleBootScenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
@@ -67,29 +68,28 @@ class LinearizabilityTest extends FlatSpec with Matchers {
     SimulationUtils.isLinearizable(history) should be (true)
   }
 
-  "GET after 2 failures (no quorum attainable)" should "not complete" in {
+  "GET after 2 failures (no quorum attainable)" should "not complete but still be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = Scenarios.scenario3(6)
+    val simpleBootScenario = LinearizabilityScenarios.scenario3(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
     simpleBootScenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
     println(history)
     SimulationUtils.isComplete(history) should be (false)
+    SimulationUtils.isLinearizable(history) should be (true)
   }
 
   "Time lease with partition" should "allow reads but no modifications while leader is separated from the other replicas," +
     "Meanwhile the isolated set of replicas (2) have to wait until the lease expires to achieve their own quorum." in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = Scenarios.scenario4(6)
+    val simpleBootScenario = LinearizabilityScenarios.scenario4(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
     simpleBootScenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
     println(history)
-    val completeHistory = SimulationUtils.removeIncompleteOperations(history)
-    println(completeHistory)
-    SimulationUtils.isLinearizable(completeHistory) should be (true)
+    SimulationUtils.isLinearizable(history) should be (true)
   }
 }
 
@@ -110,7 +110,7 @@ case class SerializedHistory(var serializedEvents: String = "") extends  Seriali
 }
 
 
-object Scenarios {
+object LinearizabilityScenarios {
   import Distributions._
   implicit val random: Random = JSimulationScenario.getRandom
   val setUniformLatencyNetwork: () => adaptor.Operation[ChangeNetworkModelEvent] = () => Op.apply((_: Unit) => ChangeNetwork(NetworkModels.withUniformRandomDelay(33, 100)))
@@ -315,8 +315,8 @@ object Scenarios {
       .afterTermination(separate4And5) // partition network: all - {4, 5} and {4,5}
       .andThen(1.seconds)
       .afterTermination(startGetClient) // get(test) from isolated leader (server 6) holding lease
-      .inParallel(startPut2Client) // call to server 6 (leader with (LEADER, ACCEPT)) with put(test, 2), which holds it until connectivity returns, cannot proceed without majority
-      .inParallel(startPut3ClientInPartitionWith4And5) // call to server 5 (isolated along with 4) from client in same partition with put(test, 2), which does not go through until lease is released
+      .inParallel(startPut2Client) // call to server 6 (leader with (LEADER, ACCEPT)) with put(test, 2), which is never completed due to lost connectivity
+      .inParallel(startPut3ClientInPartitionWith4And5) // call to server 5 (isolated along with 4) from client in same partition with put(test, 2), which is held by new leader 5 with state (LEADER, PREPARE), which holds it until it receives lease
       .andThen(10.seconds)
       .afterTermination(networkSetup) // connectivity is restored
       .andThen(3.seconds)

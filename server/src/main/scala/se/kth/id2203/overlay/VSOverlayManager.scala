@@ -127,9 +127,11 @@ class VSOverlayManager extends ComponentDefinition {
 
   epfd uponEvent {
     case Suspect(p) => handle {
+      log.info(s"Node $p is suspected to have failed")
       suspected += p
     }
     case Restore(p) => handle {
+      log.info(s"Node $p is not suspected to have failed anymore")
       suspected -= p
     }
   }

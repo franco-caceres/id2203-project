@@ -72,9 +72,9 @@ object SimulationUtils {
   }
 
   def isLinearizable(h: History, S: collection.mutable.Map[String, String] = collection.mutable.Map.empty): Boolean = {
-    if(!isComplete(h)) {
+    /*if(!isComplete(h)) {
       throw new IllegalArgumentException("Only checking complete histories for linearizability")
-    }
+    }*/
     _isLinearizable(h, S)
   }
 
@@ -84,36 +84,69 @@ object SimulationUtils {
     }
     for(e <- h.events) {
       if(isMinimal(e, h)) {
-        val eRes = h.events.find(x => !x.isCall && x.res.id == e.op.id).get
-        var originalValue = S.get(e.op.key)
-        val ok: Boolean = e.op match {
-          case g: Get => {
-            val expected = S.get(g.key)
-            val actual = eRes.res.value
-            expected == actual
-          }
-          case p: Put => {
-            S(p.key) = p.value
-            val expected = p.value
-            val actual = eRes.res.value
-            Some(expected) == actual
-          }
-          case c: Cas => {
-            if(S.get(c.key).isDefined && S(c.key) == c.compareValue) {
-              S(c.key) = c.setValue
+        val eResOpt = h.events.find(x => !x.isCall && x.res.id == e.op.id)
+        if(eResOpt.isDefined) {
+          val eRes = eResOpt.get
+          val originalValue = S.get(e.op.key)
+          val ok: Boolean = e.op match {
+            case g: Get => {
+              val expected = S.get(g.key)
+              val actual = eRes.res.value
+              expected == actual
             }
-            val expected = S.get(c.key)
-            val actual = eRes.res.value
-            expected == actual
+            case p: Put => {
+              S(p.key) = p.value
+              val expected = p.value
+              val actual = eRes.res.value
+              Some(expected) == actual
+            }
+            case c: Cas => {
+              if(S.get(c.key).isDefined && S(c.key) == c.compareValue) {
+                S(c.key) = c.setValue
+              }
+              val expected = S.get(c.key)
+              val actual = eRes.res.value
+              expected == actual
+            }
           }
-        }
-        if(ok && _isLinearizable(removeCallAndReturn(e, h), S)) {
-          return true
-        } else {
-          if(originalValue.isEmpty) {
-            S.remove(e.op.key)
+          if(ok && _isLinearizable(removeCallAndReturn(e, h), S)) {
+            return true
           } else {
-            S(e.op.key) = originalValue.get
+            if(originalValue.isEmpty) {
+              S.remove(e.op.key)
+            } else {
+              S(e.op.key) = originalValue.get
+            }
+          }
+        } else {
+          // return event does not exist
+          // either remove it
+          if(_isLinearizable(removeCallAndReturn(e, h), S)) {
+            return true
+          }
+          // or apply it
+          val originalValue = S.get(e.op.key)
+          e.op match {
+            case g: Get => {
+              true
+            }
+            case p: Put => {
+              S(p.key) = p.value
+            }
+            case c: Cas => {
+              if(S.get(c.key).isDefined && S(c.key) == c.compareValue) {
+                S(c.key) = c.setValue
+              }
+            }
+          }
+          if(_isLinearizable(removeCallAndReturn(e, h), S)) {
+            return true
+          } else {
+            if(originalValue.isEmpty) {
+              S.remove(e.op.key)
+            } else {
+              S(e.op.key) = originalValue.get
+            }
           }
         }
       }
