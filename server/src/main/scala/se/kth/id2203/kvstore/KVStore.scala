@@ -27,7 +27,6 @@ package se.kth.id2203.kvstore
 
 import se.kth.id2203.implemented._
 import se.kth.id2203.networking._
-import se.kth.id2203.overlay.Routing
 import se.sics.kompics.KompicsEvent
 import se.sics.kompics.network.Network
 import se.sics.kompics.sl._;
@@ -39,7 +38,6 @@ case class KVCommand(header: NetHeader, op: Operation) extends RSM_Command with 
 class KVService extends ComponentDefinition {
   //******* Ports ******
   val net = requires[Network];
-  val route = requires(Routing);
   val rb = requires[ReliableBroadcast];
   val sc = requires[SequenceConsensus];
 
@@ -51,12 +49,6 @@ class KVService extends ComponentDefinition {
   net uponEvent {
     case NetMessage(header, op: Operation) => handle {
       trigger(RB_Broadcast(KVCommand(header, op)) -> rb)
-    }
-  }
-
-  rb uponEvent {
-    case RB_Deliver(src, kvc: KVCommand) => handle {
-      trigger(SC_Propose(kvc) -> sc)
     }
   }
 

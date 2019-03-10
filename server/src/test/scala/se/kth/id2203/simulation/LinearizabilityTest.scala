@@ -49,9 +49,9 @@ class LinearizabilityTest extends FlatSpec with Matchers {
   "Parallel GET, PUT, and CAS" should "be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = LinearizabilityScenarios.scenario1(6)
+    val scenario = LinearizabilityScenarios.scenario1(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
-    simpleBootScenario.simulate(classOf[LauncherComp]);
+    scenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
     println(history)
     SimulationUtils.isLinearizable(history) should be (true)
@@ -60,9 +60,9 @@ class LinearizabilityTest extends FlatSpec with Matchers {
   "GET after a failure still works and" should "be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = LinearizabilityScenarios.scenario2(6)
+    val scenario = LinearizabilityScenarios.scenario2(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
-    simpleBootScenario.simulate(classOf[LauncherComp]);
+    scenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
     println(history)
     SimulationUtils.isLinearizable(history) should be (true)
@@ -71,9 +71,9 @@ class LinearizabilityTest extends FlatSpec with Matchers {
   "GET after 2 failures (no quorum attainable)" should "not complete but still be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = LinearizabilityScenarios.scenario3(6)
+    val scenario = LinearizabilityScenarios.scenario3(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
-    simpleBootScenario.simulate(classOf[LauncherComp]);
+    scenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
     println(history)
     SimulationUtils.isComplete(history) should be (false)
@@ -84,9 +84,9 @@ class LinearizabilityTest extends FlatSpec with Matchers {
     "Meanwhile the isolated set of replicas (2) have to wait until the lease expires to achieve their own quorum." in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val simpleBootScenario = LinearizabilityScenarios.scenario4(6)
+    val scenario = LinearizabilityScenarios.scenario4(6)
     SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
-    simpleBootScenario.simulate(classOf[LauncherComp]);
+    scenario.simulate(classOf[LauncherComp]);
     val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
     println(history)
     SimulationUtils.isLinearizable(history) should be (true)
@@ -113,7 +113,7 @@ case class SerializedHistory(var serializedEvents: String = "") extends  Seriali
 object LinearizabilityScenarios {
   import Distributions._
   implicit val random: Random = JSimulationScenario.getRandom
-  val setUniformLatencyNetwork: () => adaptor.Operation[ChangeNetworkModelEvent] = () => Op.apply((_: Unit) => ChangeNetwork(NetworkModels.withUniformRandomDelay(33, 100)))
+  val setUniformLatencyNetwork: () => adaptor.Operation[ChangeNetworkModelEvent] = () => Op.apply((_: Unit) => ChangeNetwork(NetworkModels.withUniformRandomDelay(35, 45)))
   val startServerOp = Op { (self: Integer) =>
     val selfAddr = intToServerAddress(self)
     val conf = if (isBootstrap(self)) {
@@ -124,8 +124,8 @@ object LinearizabilityScenarios {
           "id2203.project.minKey" -> Int.MinValue,
           "id2203.project.maxKey" -> Int.MaxValue,
           "id2203.project.useTimeLease" -> false,
-          "id2203.project.ble.delay" -> 100,
-          "id2203.project.epfd.delay" -> 100)
+          "id2203.project.ble.delay" -> 95,
+          "id2203.project.epfd.delay" -> 95)
     } else {
       Map(
         "id2203.project.address" -> selfAddr,
@@ -133,8 +133,8 @@ object LinearizabilityScenarios {
         "id2203.project.minKey" -> Int.MinValue,
         "id2203.project.maxKey" -> Int.MaxValue,
         "id2203.project.useTimeLease" -> false,
-        "id2203.project.ble.delay" -> 100,
-        "id2203.project.epfd.delay" -> 100)
+        "id2203.project.ble.delay" -> 95,
+        "id2203.project.epfd.delay" -> 95)
     };
     StartNode(selfAddr, Init.none[ParentComponent], conf);
   }
@@ -148,8 +148,8 @@ object LinearizabilityScenarios {
         "id2203.project.minKey" -> Int.MinValue,
         "id2203.project.maxKey" -> Int.MaxValue,
         "id2203.project.useTimeLease" -> true,
-        "id2203.project.ble.delay" -> 40,
-        "id2203.project.epfd.delay" -> 40)
+        "id2203.project.ble.delay" -> 95,
+        "id2203.project.epfd.delay" -> 95)
     } else Map(
       "id2203.project.address" -> selfAddr,
       "id2203.project.bootstrap-address" -> intToServerAddress(1),
@@ -158,8 +158,8 @@ object LinearizabilityScenarios {
       "id2203.project.leaseDuration" -> 10000,
       "id2203.project.clock.error" -> 1,
       "id2203.project.useTimeLease" -> true,
-      "id2203.project.ble.delay" -> 40,
-      "id2203.project.epfd.delay" -> 40);
+      "id2203.project.ble.delay" -> 95,
+      "id2203.project.epfd.delay" -> 95);
     StartNode(selfAddr, Init.none[ParentComponent], conf);
   }
   val startClientOp = Op { (self: Integer) =>
@@ -278,7 +278,6 @@ object LinearizabilityScenarios {
   }
 
   def scenario4(servers: Int): JSimulationScenario = {
-    val uniformLatency: () => adaptor.Operation[ChangeNetworkModelEvent] = () => Op.apply((_: Unit) => ChangeNetwork(NetworkModels.withConstantDelay(10)))
     val separate4And5Setup: () => adaptor.Operation[ChangeNetworkModelEvent] =
       () => Op.apply(
         (_: Unit) =>
@@ -297,7 +296,7 @@ object LinearizabilityScenarios {
             )
           )
       )
-    val networkSetup = raise(1, uniformLatency()).arrival(constant(0))
+    val networkSetup = raise(1, setUniformLatencyNetwork()).arrival(constant(0))
     val separate4And5 = raise(1, separate4And5Setup()).arrival(constant(0))
     val startClusterTimeLease = raise(servers, startServerTimeLeaseOp, 1.toN).arrival(constant(1.second))
     val startGetClient = raise(1, startGetClientOp, 1.toN).arrival(constant(0.second))

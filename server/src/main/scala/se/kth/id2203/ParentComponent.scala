@@ -64,7 +64,6 @@ class ParentComponent extends ComponentDefinition {
     connect[Network](net -> overlay);
     connect[EventuallyPerfectFailureDetector](epfd -> overlay)
     // KV
-    connect(Routing)(overlay -> kv);
     connect[Network](net -> kv);
     // broadcast
     connect[Network](net -> beb);

@@ -29,7 +29,6 @@ import se.kth.id2203.bootstrapping._
 import se.kth.id2203.networking._
 import se.sics.kompics.network.Network
 import se.sics.kompics.sl._
-import se.sics.kompics.timer.Timer
 import se.kth.id2203.implemented._
 
 import scala.util.Random;
@@ -47,11 +46,9 @@ import scala.util.Random;
   */
 class VSOverlayManager extends ComponentDefinition {
   //******* Ports ******
-  val route = provides(Routing);
   val topo = provides[Topology];
   val boot = requires(Bootstrapping);
   val net = requires[Network];
-  val timer = requires[Timer];
   val epfd = requires[EventuallyPerfectFailureDetector]
 
   //******* Fields ******
@@ -107,20 +104,6 @@ class VSOverlayManager extends ComponentDefinition {
           trigger(NetMessage(self, header.src, msg.ack(size)) -> net);
         }
         case None => log.info("Rejecting connection request from ${header.src}, as system is not ready, yet.");
-      }
-    }
-  }
-
-  route uponEvent {
-    case RouteMsg(key, msg) => handle {
-      val nodes = lut.get.lookup(key);
-      assert(!nodes.isEmpty);
-      val aliveNodes = nodes.filterNot(x => suspected.contains(x))
-      if(aliveNodes.nonEmpty) {
-        val i = Random.nextInt(aliveNodes.size);
-        val target = nodes.drop(i).head;
-        log.info(s"Forwarding message for key $key to $target");
-        trigger(NetMessage(self, target, msg) -> net);
       }
     }
   }
