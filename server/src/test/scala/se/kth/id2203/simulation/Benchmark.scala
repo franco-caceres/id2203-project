@@ -49,7 +49,7 @@ class Benchmark extends FlatSpec with Matchers {
   "Regular sequence Paxos" should "be slower" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val scenario = BenchmarkScenarios.scenario1(6)
+    val scenario = BenchmarkScenarios.scenario1(10)
     val now = System.currentTimeMillis()
     scenario.simulate(classOf[LauncherComp]);
     println("Regular sequence Paxos took " + (System.currentTimeMillis() - now) + "ms.")
@@ -58,7 +58,7 @@ class Benchmark extends FlatSpec with Matchers {
   "Sequence Paxos with time leases" should "be faster" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
-    val scenario = BenchmarkScenarios.scenario2(6)
+    val scenario = BenchmarkScenarios.scenario2(10)
     val now = System.currentTimeMillis()
     scenario.simulate(classOf[LauncherComp]);
     println("Sequence Paxos with time leases took " + (System.currentTimeMillis() - now) + "ms.")
@@ -74,8 +74,8 @@ object BenchmarkScenarios {
     val conf = if (isBootstrap(self)) {
       // don't put this at the bootstrap server, or it will act as a bootstrap client
       Map("id2203.project.address" -> selfAddr,
-        "id2203.project.bootThreshold" -> 6,
-        "id2203.project.replicationDegree" -> 6,
+        "id2203.project.bootThreshold" -> 10,
+        "id2203.project.replicationDegree" -> 10,
         "id2203.project.minKey" -> Int.MinValue,
         "id2203.project.maxKey" -> Int.MaxValue,
         "id2203.project.useTimeLease" -> false,
@@ -98,8 +98,8 @@ object BenchmarkScenarios {
     val conf = if (isBootstrap(self)) {
       // don't put this at the bootstrap server, or it will act as a bootstrap client
       Map("id2203.project.address" -> selfAddr,
-        "id2203.project.bootThreshold" -> 6,
-        "id2203.project.replicationDegree" -> 6,
+        "id2203.project.bootThreshold" -> 10,
+        "id2203.project.replicationDegree" -> 10,
         "id2203.project.minKey" -> Int.MinValue,
         "id2203.project.maxKey" -> Int.MaxValue,
         "id2203.project.useTimeLease" -> true,
@@ -176,15 +176,14 @@ object BenchmarkScenarios {
     val networkSetup = raise(1, setUniformLatencyNetwork()).arrival(constant(0))
     val startCluster = raise(servers, startServerOp, 1.toN).arrival(constant(1.second))
     val startGetClients = raise(255, startGetClientOp, 1.toN).arrival(constant(100.milliseconds))
-    val startPutClient = raise(1, startPutClientOp, 2.toN, 1.toN).arrival(constant(1.second))
+    val startPutClients = raise(10, startPutClientOp, 2.toN, 1.toN).arrival(constant(1.second))
 
     networkSetup
       .andThen(0.seconds)
       .afterTermination(startCluster)
       .andThen(30.seconds)
-      .afterTermination(startPutClient)
-      .andThen(3.seconds)
       .afterTermination(startGetClients)
+      .inParallel(startPutClients)
       .andThen(3.seconds)
       .afterTermination(Terminate)
   }
@@ -193,15 +192,14 @@ object BenchmarkScenarios {
     val networkSetup = raise(1, setUniformLatencyNetwork()).arrival(constant(0))
     val startClusterTimeLease = raise(servers, startServerTimeLeaseOp, 1.toN).arrival(constant(1.second))
     val startGetClients = raise(255, startGetClientOp, 1.toN).arrival(constant(100.milliseconds))
-    val startPutClient = raise(1, startPutClientOp, 2.toN, 1.toN).arrival(constant(1.second))
+    val startPutClients = raise(10, startPutClientOp, 2.toN, 1.toN).arrival(constant(1.second))
 
     networkSetup
       .andThen(0.seconds)
       .afterTermination(startClusterTimeLease)
       .andThen(30.seconds)
-      .afterTermination(startPutClient)
-      .andThen(3.seconds)
       .afterTermination(startGetClients)
+      .inParallel(startPutClients)
       .andThen(3.seconds)
       .afterTermination(Terminate)
   }

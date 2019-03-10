@@ -52,6 +52,12 @@ class KVService extends ComponentDefinition {
     }
   }
 
+  rb uponEvent {
+    case RB_Deliver(src, kvc: KVCommand) => handle {
+      trigger(SC_Propose(kvc) -> sc)
+    }
+  }
+
   sc uponEvent {
     case SC_Decide(KVCommand(header, op: Operation)) => handle {
       op match {

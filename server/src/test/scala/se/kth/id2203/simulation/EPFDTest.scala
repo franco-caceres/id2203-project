@@ -42,21 +42,21 @@ import se.sics.kompics.sl.simulator._
 import scala.concurrent.duration._
 
 class EPFDTest extends FlatSpec with Matchers {
-  "No node" should "be suspected under normal network conditions" in {
+  "Scenario 1: No node" should "be suspected under normal network conditions" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
     val scenario = EPFDScenarios.scenario1(6)
     scenario.simulate(classOf[LauncherComp]);
   }
 
-  "Node  192.193.0.6" should "be suspected to have failed by all other nodes" in {
+  "Scenario 2: Node  192.193.0.6" should "be suspected to have failed by all other nodes" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
     val scenario = EPFDScenarios.scenario2(6)
     scenario.simulate(classOf[LauncherComp]);
   }
 
-  "Node  192.193.0.6" should "be suspected to have failed by all other nodes at first, but then restored after the network partition is resolved" in {
+  "Scenario 3: Node  192.193.0.6" should "be suspected to have failed by all other nodes at first, but then restored after the network partition is resolved" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
     val scenario = EPFDScenarios.scenario3(6)

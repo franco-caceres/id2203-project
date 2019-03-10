@@ -46,7 +46,7 @@ import se.sics.kompics.network.{Network, Address, Header, Msg, Transport};
 import scala.concurrent.duration._
 
 class LinearizabilityTest extends FlatSpec with Matchers {
-  "Parallel GET, PUT, and CAS" should "be linearizable" in {
+  "Scenario 1: Parallel GET, PUT, and CAS" should "be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
     val scenario = LinearizabilityScenarios.scenario1(6)
@@ -57,7 +57,7 @@ class LinearizabilityTest extends FlatSpec with Matchers {
     SimulationUtils.isLinearizable(history) should be (true)
   }
 
-  "GET after a failure still works and" should "be linearizable" in {
+  "Scenario 2: Operations after leader is killed are still replied and" should "be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
     val scenario = LinearizabilityScenarios.scenario2(6)
@@ -68,7 +68,7 @@ class LinearizabilityTest extends FlatSpec with Matchers {
     SimulationUtils.isLinearizable(history) should be (true)
   }
 
-  "GET after 2 failures (no quorum attainable)" should "not complete but still be linearizable" in {
+  "Scenario 3: GET after 2 failures (no quorum attainable)" should "not complete but still be linearizable" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
     val scenario = LinearizabilityScenarios.scenario3(6)
@@ -80,7 +80,20 @@ class LinearizabilityTest extends FlatSpec with Matchers {
     SimulationUtils.isLinearizable(history) should be (true)
   }
 
-  "Time lease with partition" should "allow reads but no modifications while leader is separated from the other replicas," +
+  "Scenario 4: isolate leader from the 2 other nodes. Then, send requests to the new leader, then remove the isolation and" +
+    "send more requests. The history" should "not be complete but still be linearizable" in {
+    val seed = 123l
+    JSimulationScenario.setSeed(seed)
+    val scenario = LinearizabilityScenarios.scenario4(6)
+    SimulationResult += ("history" -> SimulationUtils.serialize(SerializedHistory()))
+    scenario.simulate(classOf[LauncherComp]);
+    val history = SimulationUtils.deserialize[SerializedHistory](SimulationResult.get[String]("history").get).deserialize
+    println(history)
+    SimulationUtils.isComplete(history) should be (false)
+    SimulationUtils.isLinearizable(history) should be (true)
+  }
+
+  "Lease Scenario: An isolated leader due to a partition" should "reply to reads, but not modifications." +
     "Meanwhile the isolated set of replicas (2) have to wait until the lease expires to achieve their own quorum." in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
@@ -147,6 +160,8 @@ object LinearizabilityScenarios {
         "id2203.project.replicationDegree" -> 3,
         "id2203.project.minKey" -> Int.MinValue,
         "id2203.project.maxKey" -> Int.MaxValue,
+        "id2203.project.leaseDuration" -> 20000,
+        "id2203.project.clock.error" -> 1,
         "id2203.project.useTimeLease" -> true,
         "id2203.project.ble.delay" -> 95,
         "id2203.project.epfd.delay" -> 95)
@@ -155,7 +170,7 @@ object LinearizabilityScenarios {
       "id2203.project.bootstrap-address" -> intToServerAddress(1),
       "id2203.project.minKey" -> Int.MinValue,
       "id2203.project.maxKey" -> Int.MaxValue,
-      "id2203.project.leaseDuration" -> 10000,
+      "id2203.project.leaseDuration" -> 20000,
       "id2203.project.clock.error" -> 1,
       "id2203.project.useTimeLease" -> true,
       "id2203.project.ble.delay" -> 95,
@@ -236,11 +251,16 @@ object LinearizabilityScenarios {
   }
 
   def scenario2(servers: Int): JSimulationScenario = {
+    implicit val random: Random = JSimulationScenario.getRandom
     val networkSetup = raise(1, setUniformLatencyNetwork()).arrival(constant(0))
     val startCluster = raise(servers, startServerOp, 1.toN).arrival(constant(1.second))
     val startGetClient = raise(1, startGetClientOp, 1.toN).arrival(constant(1.second))
     val startPutClient = raise(1, startPutClientOp, 2.toN, 1.toN).arrival(constant(1.second))
-    val killServer = raise(1, killServerOp, 4.toN).arrival(constant(0.seconds))
+    val startCasClient = raise(1, startCasClientOp, 3.toN, 1.toN, 2.toN).arrival(constant(1.second))
+    val killServer = raise(1, killServerOp, 6.toN).arrival(constant(1.seconds))
+    val startPutManyClient = raise(2, startPutClientOp, 1.toN, 1.toN).arrival(constant(1.second))
+    val startCasManyClient = raise(2, startCasClientOp, 1.toN, 1.toN, 1.toN).arrival(constant(1.second))
+    val startGetManyClient = raise(2, startGetClientOp, 1.toN).arrival(constant(1.second))
 
     networkSetup
       .andThen(0.seconds)
@@ -250,8 +270,14 @@ object LinearizabilityScenarios {
       .andThen(3.seconds)
       .afterTermination(killServer)
       .andThen(5.seconds)
-      .afterTermination(startGetClient)
+      .afterTermination(startPutManyClient)
+      .andThen(50.milliseconds)
+      .afterTermination(startGetManyClient)
+      .andThen(45.milliseconds)
+      .afterTermination(startCasManyClient)
       .andThen(5.seconds)
+      .afterTermination(startGetClient)
+      .andThen(3.seconds)
       .afterTermination(Terminate)
   }
 
@@ -259,7 +285,7 @@ object LinearizabilityScenarios {
     val networkSetup = raise(1, setUniformLatencyNetwork()).arrival(constant(0))
     val startCluster = raise(servers, startServerOp, 1.toN).arrival(constant(1.second))
     val startGetClient = raise(1, startGetClientOp, 1.toN).arrival(constant(1.second))
-    val startPutClient = raise(1, startPutClientOp, 2.toN, 1.toN).arrival(constant(1.second))
+    val startPutClient = raise(1, startPutClientOp, 2.toN, 30.toN).arrival(constant(1.second))
     val killServer1 = raise(1, killServerOp, 4.toN).arrival(constant(0.seconds))
     val killServer2 = raise(1, killServerOp, 5.toN).arrival(constant(0.seconds))
 
@@ -298,6 +324,56 @@ object LinearizabilityScenarios {
       )
     val networkSetup = raise(1, setUniformLatencyNetwork()).arrival(constant(0))
     val separate4And5 = raise(1, separate4And5Setup()).arrival(constant(0))
+    val startClusterTimeLease = raise(servers, startServerOp, 1.toN).arrival(constant(1.second))
+    val startGetClient = raise(1, startGetClientOp, 1.toN).arrival(constant(1.second))
+    val startPut1Client = raise(1, startPutClientOp, 2.toN, 1.toN).arrival(constant(1.second))
+    val startPut2Client = raise(1, startPutClientOp, 3.toN, 2.toN).arrival(constant(1.second))
+    val startPut4Client = raise(1, startPutClientOp, 4.toN, 4.toN).arrival(constant(1.second))
+    val startPut3ClientInPartitionWith4And5 = raise(1, startPutClientWithTargetOp, 4.toN, 3.toN, 5.toN).arrival(constant(1.second))
+
+    networkSetup
+      .andThen(0.seconds)
+      .afterTermination(startClusterTimeLease)
+      .andThen(10.seconds) // 6 is leader
+      .afterTermination(startPut1Client)
+      .andThen(1.seconds)
+      .afterTermination(separate4And5)
+      .andThen(1.seconds)
+      .afterTermination(startPut2Client) // this should not go through
+      .andThen(35.milliseconds)
+      .afterTermination(startPut3ClientInPartitionWith4And5) // ok
+      .andThen(10.seconds)
+      .afterTermination(networkSetup) // connectivity is restored
+      .andThen(3.seconds)
+      .afterTermination(startGetClient) // ok
+      .andThen(3.seconds)
+      .afterTermination(startPut4Client) // ok
+      .inParallel(startGetClient) // ok
+      .andThen(3.seconds)
+      .afterTermination(Terminate)
+  }
+
+  def scenarioTimeLease(servers: Int): JSimulationScenario = {
+    val separate4And5Setup: () => adaptor.Operation[ChangeNetworkModelEvent] =
+      () => Op.apply(
+        (_: Unit) =>
+          ChangeNetwork(
+            NetworkModels.withPartitionedModel(
+              (adr: Address) => (_: Int) => adr.getIp.toString.split('.').last.toInt,
+              NetworkModels.withConstantDelay(10),
+              (nodeId: Identifier) => {
+                // isolate servers whose IP end in .4 and .5
+                if (Seq(4, 5).contains(nodeId.partition(1))) {
+                  2
+                } else {
+                  1
+                }
+              }
+            )
+          )
+      )
+    val networkSetup = raise(1, setUniformLatencyNetwork()).arrival(constant(0))
+    val separate4And5 = raise(1, separate4And5Setup()).arrival(constant(0))
     val startClusterTimeLease = raise(servers, startServerTimeLeaseOp, 1.toN).arrival(constant(1.second))
     val startGetClient = raise(1, startGetClientOp, 1.toN).arrival(constant(0.second))
     val startPut1Client = raise(1, startPutClientOp, 2.toN, 1.toN).arrival(constant(0.second))
@@ -314,8 +390,10 @@ object LinearizabilityScenarios {
       .afterTermination(separate4And5) // partition network: all - {4, 5} and {4,5}
       .andThen(1.seconds)
       .afterTermination(startGetClient) // get(test) from isolated leader (server 6) holding lease
-      .inParallel(startPut2Client) // call to server 6 (leader with (LEADER, ACCEPT)) with put(test, 2), which is never completed due to lost connectivity
-      .inParallel(startPut3ClientInPartitionWith4And5) // call to server 5 (isolated along with 4) from client in same partition with put(test, 2), which is held by new leader 5 with state (LEADER, PREPARE), which holds it until it receives lease
+      .andThen(35.milliseconds)
+      .afterTermination(startPut2Client) // call to server 6 (leader with (LEADER, ACCEPT)) with put(test, 2), which is never completed due to lost connectivity
+      .andThen(25.milliseconds)
+      .afterTermination(startPut3ClientInPartitionWith4And5) // call to server 5 (isolated along with 4) from client in same partition with put(test, 2), which is held by new leader 5 with state (LEADER, PREPARE), which holds it until it receives lease
       .andThen(10.seconds)
       .afterTermination(networkSetup) // connectivity is restored
       .andThen(3.seconds)
