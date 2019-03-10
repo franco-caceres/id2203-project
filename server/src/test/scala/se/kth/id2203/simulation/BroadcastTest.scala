@@ -44,7 +44,7 @@ import se.sics.kompics.sl.simulator._
 import scala.concurrent.duration._
 
 class BroadcastTest extends FlatSpec with Matchers {
-  "Node 192.193.0.1 receives a request and sends it to a node in the correct partition." +
+  "Scenario 1: Node 192.193.0.1 receives a request and sends it to a node in the correct partition." +
     "All nodes in the correct partitions" should "deliver a client request whose key belongs to their partition" in {
     val seed = 123l
     JSimulationScenario.setSeed(seed)
